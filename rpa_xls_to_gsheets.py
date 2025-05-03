@@ -22,7 +22,7 @@ import gspread
 #%%
 
 options = Options()
-#options.add_argument("--headless")
+options.add_argument("--headless")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-gpu")
 
@@ -36,8 +36,8 @@ options.add_experimental_option("prefs", {
 driver = Chrome(options=options)
 
 def login_sesuite():
-
-    davpass = open('cpass', 'r').read()
+    
+    davpass = open(os.path.join(os.path.dirname(os.getcwd()), '.cpass'), 'r').read()    
     
     print("Acessando SE Suite...")
     
@@ -164,17 +164,11 @@ df = pd.read_excel(r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 #%%
 
 df = df.iloc[1:].reset_index(drop=True)
-
 df = df.drop(columns=['P', 'S', 'SW', 'SLA', 'PR', 'D', 'A', 'Executor', 'Processo', 'Tipo de workflow'])
-
 df = df[~df["Atividade habilitada"].str.startswith("Confirmar recebimento  do item solicitado", na=False)]
-
 df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da solicitação", na=False)]
-
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
-
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
-
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
 print()
 print('Total de chamados: {}' .format(df["Identificador"].count()))
@@ -254,10 +248,7 @@ def extrai_dados (numchamado):
         except:
             print(f"Tentativa {tentativa+1}: botão não encontrado, tentando novamente...")
             sleep(2)    
-    
-
-    
-    
+        
     # Espera e entra no iframe
     WebDriverWait(driver, 100).until(
         EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
@@ -308,7 +299,8 @@ def extrai_dados (numchamado):
 
 #%% Google Sheets
 
-gc = gspread.service_account(filename='crested-century-386316-01c90985d6e4.json')
+gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()), 'crested-century-386316-01c90985d6e4.json'))
+
 spreadsheet = gc.open("Acompanhamento_Aquisições_Teste")
 worksheet = spreadsheet.worksheet("Dados")
 
@@ -349,15 +341,27 @@ cabecalhos_esperados = ["Unidade", "Data Aprovação GP", "Identificador", "Ativ
                         "Data Atualização"]
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
+linhas_existentes = worksheet.get_all_values()
+mapa_identificador_linha = {
+    str(linha[2]): idx + 1  # col 2 = "Identificador", +1 porque gspread começa em 1
+    for idx, linha in enumerate(linhas_existentes[1:])  # pula cabeçalho
+    if len(linha) > 2  # ignora linhas incompletas
+}
+
 hoje = datetime.now().strftime("%d/%m/%Y")
 
-ids_ja_processados = {
-    str(linha["Identificador"]) for linha in valores_existentes if linha.get("Data Atualização") == hoje
+# ids_ja_processados = {
+#     str(linha["Identificador"]) for linha in valores_existentes if linha.get("Data Atualização") == hoje
+# }
+
+pares_ja_processados = {
+    (str(linha["Identificador"]), linha["Atividade Habilitada"]) for linha in valores_existentes
 }
 
 for idx, numero in enumerate(num_chamados):
-    if str(numero) in ids_ja_processados:
-        print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} já processado hoje. Pulando.")
+    #if str(numero) in ids_ja_processados:
+    if (str(numero), atividadehabilitada[idx]) in pares_ja_processados:
+        print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} sem alteração de status. Pulando.")
         continue
 
     print(f"[{idx+1}/{len(num_chamados)}] Acessando chamado {numero}")
@@ -383,7 +387,17 @@ for idx, numero in enumerate(num_chamados):
         
         linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
 
-        worksheet.append_row(linha_ordenada)
+        #worksheet.append_row(linha_ordenada)
+        
+        identificador_str = str(numero)
+        linha_existente = mapa_identificador_linha.get(identificador_str)
+        
+        if linha_existente:
+            worksheet.update(values=[linha_ordenada], range_name=f"A{linha_existente+1}")
+            print(f"🔁 Chamado {identificador_str} atualizado na linha {linha_existente+1}.")
+        else:
+            worksheet.append_row(linha_ordenada)
+            print(f"➕ Chamado {identificador_str} adicionado ao final da planilha.")
         
         #dados_dos_chamados["Descrição"] = objetos_compra[idx]
         #colunas = df.columns.tolist()
@@ -394,9 +408,13 @@ for idx, numero in enumerate(num_chamados):
 
         #worksheet.append_row(list(dados_dos_chamados.values()))
 
-df = pd.DataFrame(todos_os_dados)
+#worksheet.format("L2:L", {"numberFormat": {"type": "CURRENCY"}})
 
-df["Descrição"] = objetos_compra
+#driver.quit()
+
+#df = pd.DataFrame(todos_os_dados)
+
+#df["Descrição"] = objetos_compra
 
 # Reorganiza a ordem das colunas
 #colunas = df.columns.tolist()
