@@ -22,7 +22,7 @@ import gspread
 #%%
 
 options = Options()
-options.add_argument("--headless")
+#options.add_argument("--headless")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-gpu")
 
@@ -254,6 +254,16 @@ def extrai_dados (numchamado):
         EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
     )
     
+    modalidade_map = {
+    "d2801b01f3eafc41709cbb42567ab8c0": "AQUISIÇÃO DIRETA",
+    "548b6278c989e3fa6efa6c46dc292848": "AVALIAÇÃO COMPETITIVA (EMBRAPII)",
+    "00f807948514d8310e6a84226f3f2e74": "CONTRATAÇÃO DIRETA (EMBRAPII)",
+    "1653d026b250b711bf6ee4edcdcf874f": "DISPENSA DE LICITAÇÃO",
+    "e77f1a812ccb40258280b3b07db1d824": "SIMPLES COTAÇÃO (EMBRAPII)",
+    "6c9c19595306f579a3bf2eb4d2bd9972": "COMPRA SIMPLIFICADA",
+    "a3782c54787727b5f76fdb1d5a660a8c": "INEXIGIBILIDADE"
+    }
+    
     campos = [
         ("Unidade", '//*[@id="nmwebservice_125f53af450b635b0544d2eb4d9ae6b8"]'),
         ("Data Aprovação GP", '//*[@id="field_8a3449076f9f6db3016fc927250c1163"]'),
@@ -277,12 +287,15 @@ def extrai_dados (numchamado):
     print("Dados do chamado ", numchamado, " extraídos.")
     
     dados_dos_chamados = {}
-        
+            
     for nome, xpath in campos:
         element = WebDriverWait(driver, 100).until(
             EC.presence_of_element_located((By.XPATH, xpath))
         )
         dados_dos_chamados[nome] = element.get_attribute("value")
+    
+    codigo_modalidade = dados_dos_chamados.get("Modalidade")
+    dados_dos_chamados["Modalidade"] = modalidade_map.get(codigo_modalidade, codigo_modalidade)
     
     #driver.close()
     #sleep(1)
