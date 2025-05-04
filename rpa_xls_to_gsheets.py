@@ -11,8 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
-#from selenium.common.exceptions import TimeoutException
-#from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.common.exceptions import TimeoutException
 from datetime import datetime
 import os
 import ctypes
@@ -22,7 +21,7 @@ import gspread
 #%%
 
 options = Options()
-#options.add_argument("--headless")
+options.add_argument("--headless")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-gpu")
 
@@ -84,7 +83,7 @@ botao_seta = WebDriverWait(driver, 10).until(
 )
 botao_seta.click()
 
-# Aguarda e clica em "Exportar para Excel"
+# "Exportar para Excel"
 botao_exportar = WebDriverWait(driver, 10).until(
     EC.element_to_be_clickable((By.XPATH, '//span[contains(text(), "Exportar para Excel")]'))
 )
@@ -98,7 +97,7 @@ sleep(1)
 
 caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
 inicio = time.time()
-timeout = 600  # até 10 minutos
+timeout = 600
 
 while time.time() - inicio < timeout:
     if os.path.exists(caminho) and not os.path.exists(caminho + ".crdownload"):
@@ -113,7 +112,7 @@ for janela in driver.window_handles:
         driver.switch_to.window(janela)
         driver.close()
 
-# Garante que está de volta na janela principal
+# Volta para janela principal
 driver.switch_to.window(janela_principal)
 
 #%%
@@ -159,14 +158,13 @@ else:
 #%%
 
 df = pd.read_excel(r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
-#print(df.head())
 
 #%%
 
 df = df.iloc[1:].reset_index(drop=True)
 df = df.drop(columns=['P', 'S', 'SW', 'SLA', 'PR', 'D', 'A', 'Executor', 'Processo', 'Tipo de workflow'])
-df = df[~df["Atividade habilitada"].str.startswith("Confirmar recebimento  do item solicitado", na=False)]
-df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da solicitação", na=False)]
+#df = df[~df["Atividade habilitada"].str.startswith("Confirmar recebimento  do item solicitado", na=False)]
+#df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da solicitação", na=False)]
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
@@ -176,7 +174,7 @@ print('Total de chamados: {}' .format(df["Identificador"].count()))
 
 #%%
 
-num_chamados = df["Identificador"].astype(int).tolist()
+num_chamados = df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6) if pd.notnull(x) else "").tolist()
 objetos_compra = df["Título"].tolist()
 atividadehabilitada = df["AtividadeHabilitadaFiltrada"].tolist()
 
@@ -210,13 +208,16 @@ def extrai_dados (numchamado):
     inserir_compra.send_keys(Keys.ENTER)
     
     print("Aguardando SE Suite...")
-    
-    primeiro_item = WebDriverWait(driver, 600).until(
-        EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
-    )
-    print("Chamado localizado. Extraindo dados...")
-    #primeiro_item.click()
-           
+        
+    try:
+        primeiro_item = WebDriverWait(driver, 60).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
+        )
+        print("Chamado localizado. Extraindo dados...")
+    except TimeoutException:
+        print("❌ Nenhum item encontrado para o chamado. Pulando.")
+        return None
+        
     for tentativa in range(5):
         handles_antes = set(driver.window_handles)
         try:
@@ -254,6 +255,7 @@ def extrai_dados (numchamado):
         EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
     )
     
+    #Modalidade de Aquisição
     modalidade_map = {
     "d2801b01f3eafc41709cbb42567ab8c0": "AQUISIÇÃO DIRETA",
     "548b6278c989e3fa6efa6c46dc292848": "AVALIAÇÃO COMPETITIVA (EMBRAPII)",
@@ -264,6 +266,7 @@ def extrai_dados (numchamado):
     "a3782c54787727b5f76fdb1d5a660a8c": "INEXIGIBILIDADE"
     }
     
+    #Campos a extrair
     campos = [
         ("Unidade", '//*[@id="nmwebservice_125f53af450b635b0544d2eb4d9ae6b8"]'),
         ("Data Aprovação GP", '//*[@id="field_8a3449076f9f6db3016fc927250c1163"]'),
@@ -274,7 +277,8 @@ def extrai_dados (numchamado):
         ("Projeto", '//*[@id="field_8a3449076f9f6db3016fd772bc7635f4"]'),
         ("Conta", '//*[@id="field_8a3449076f9f6db3016fd774d1863632"]'),
         ("Rubrica", '//*[@id="field_8a3449076f9f6db3016fc934596a145b"]'),
-        ("Valor R$", '//*[@id="field_8a3449076f9f6db3016fc922d7cd109b"]'),
+        ("Valor Inicial", '//*[@id="field_8a3449076f9f6db3016fc922d7cd109b"]'),
+        ("Valor Final", '//*[@id="field_8a3449076f9f6db3016fc96466b81ca7"]'),
         ("Justificativa", '//*[@id="field_8a3449076f9f6db3016fc921c3a2107d"]'),
         ("Justificativa GP", '//*[@id="field_8a3449076f9f6db3016fc936726114cd"]'),
         ("Data Análise Célula", '//*[@id="field_8a3449076f9f6db3016fc93bb7e515bc"]'),
@@ -294,13 +298,13 @@ def extrai_dados (numchamado):
         )
         dados_dos_chamados[nome] = element.get_attribute("value")
     
+    valor_final = dados_dos_chamados.get("Valor Final")
+    valor_inicial = dados_dos_chamados.get("Valor Inicial")
+    dados_dos_chamados["Valor R$"] = valor_final if valor_final else valor_inicial
+    
     codigo_modalidade = dados_dos_chamados.get("Modalidade")
     dados_dos_chamados["Modalidade"] = modalidade_map.get(codigo_modalidade, codigo_modalidade)
-    
-    #driver.close()
-    #sleep(1)
-    #driver.switch_to.window(driver.window_handles[0])
-     
+         
     for janela in driver.window_handles:
         if janela != janela_principal:
             driver.switch_to.window(janela)
@@ -363,16 +367,11 @@ mapa_identificador_linha = {
 
 hoje = datetime.now().strftime("%d/%m/%Y")
 
-# ids_ja_processados = {
-#     str(linha["Identificador"]) for linha in valores_existentes if linha.get("Data Atualização") == hoje
-# }
-
 pares_ja_processados = {
     (str(linha["Identificador"]), linha["Atividade Habilitada"]) for linha in valores_existentes
 }
 
 for idx, numero in enumerate(num_chamados):
-    #if str(numero) in ids_ja_processados:
     if (str(numero), atividadehabilitada[idx]) in pares_ja_processados:
         print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} sem alteração de status. Pulando.")
         continue
@@ -399,8 +398,6 @@ for idx, numero in enumerate(num_chamados):
         dados_dos_chamados["Data Atualização"] = hoje
         
         linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
-
-        #worksheet.append_row(linha_ordenada)
         
         identificador_str = str(numero)
         linha_existente = mapa_identificador_linha.get(identificador_str)
@@ -411,32 +408,8 @@ for idx, numero in enumerate(num_chamados):
         else:
             worksheet.append_row(linha_ordenada)
             print(f"➕ Chamado {identificador_str} adicionado ao final da planilha.")
-        
-        #dados_dos_chamados["Descrição"] = objetos_compra[idx]
-        #colunas = df.columns.tolist()
-        #colunas.remove("Descrição")
-        #colunas.insert(4, "Descrição")  # posição 2 = terceira coluna (0-based)
-        #dados_dos_chamados = dados_dos_chamados[colunas]
-        #dados_dos_chamados["Data Atualização"] = hoje
 
-        #worksheet.append_row(list(dados_dos_chamados.values()))
-
-#worksheet.format("L2:L", {"numberFormat": {"type": "CURRENCY"}})
-
-#driver.quit()
-
-#df = pd.DataFrame(todos_os_dados)
-
-#df["Descrição"] = objetos_compra
-
-# Reorganiza a ordem das colunas
-#colunas = df.columns.tolist()
-#colunas.remove("Descrição")
-#colunas.insert(4, "Descrição")  # posição 2 = terceira coluna (0-based)
-
-#df = df[colunas]
-
-#print(df)
+#%%        
 
 
 
