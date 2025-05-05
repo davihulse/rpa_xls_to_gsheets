@@ -34,6 +34,13 @@ options.add_experimental_option("prefs", {
 
 driver = Chrome(options=options)
 
+#Dados Google Sheets
+gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()), 'crested-century-386316-01c90985d6e4.json'))
+
+spreadsheet = gc.open("Acompanhamento_Aquisições_Teste")
+worksheet = spreadsheet.worksheet("Dados")
+
+
 def login_sesuite():
     
     davpass = open(os.path.join(os.path.dirname(os.getcwd()), '.cpass'), 'r').read()    
@@ -154,10 +161,79 @@ if os.path.exists(caminho):
 else:
     print("Arquivo original não encontrado para exclusão.")
 
-
 #%%
 
+#Lê arquivo baixado do SE Suite
 df = pd.read_excel(r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
+
+# # Leitura da lista de chamados manuais e chamados a ignorar
+# df_manuais = pd.read_excel(r"C:\RPA\se_suite_xls\chamados_extrair_manual.xlsx", header=None)
+# df_ignorar = pd.read_excel(r"C:\RPA\se_suite_xls\chamados_ignorar.xlsx", header=None)
+
+# # Limpa e converte os valores
+# if not df_manuais.empty and 0 in df_manuais.columns:
+#     lista_manuais = df_manuais[0].dropna().apply(
+#         lambda x: str(int(float(x))).zfill(6) if str(x).replace('.', '', 1).isdigit() else None
+#     ).dropna().tolist()
+# else:
+#     lista_manuais = []
+
+# if not df_ignorar.empty and 0 in df_ignorar.columns:
+#     lista_ignorar = set(
+#         df_ignorar[0].dropna().apply(
+#             lambda x: str(int(float(x))).zfill(6) if str(x).replace('.', '', 1).isdigit() else None
+#         ).dropna().tolist()
+#     )
+# else:
+#     lista_ignorar = set()
+
+# Acessa as abas "Manuais" e "Ignorar" da mesma planilha
+worksheet_manuais = spreadsheet.worksheet("Manuais")
+worksheet_ignorar = spreadsheet.worksheet("Ignorar")
+
+# Lê os valores da coluna A (sem cabeçalho)
+valores_manuais = worksheet_manuais.col_values(1)
+valores_ignorar = worksheet_ignorar.col_values(1)
+
+# Aplica validação e conversão com zfill(6)
+lista_manuais = [
+    str(int(float(x))).zfill(6)
+    for x in valores_manuais
+    if str(x).replace('.', '', 1).isdigit()
+]
+
+lista_manuais = sorted(set(lista_manuais))
+
+lista_ignorar = set(
+    str(int(float(x))).zfill(6)
+    for x in valores_ignorar
+    if str(x).replace('.', '', 1).isdigit()
+)
+
+def remover_chamado_manuais(ws, numero_formatado):
+    
+    todas_linhas = ws.get_all_values()
+
+    for i, linha in enumerate(todas_linhas):
+        if not linha or not linha[0].strip():  # ignora linhas vazias
+            continue
+
+        valor_bruto = linha[0].strip()
+
+        # só tenta converter se for numérico (com ponto ou não)
+        if not valor_bruto.replace('.', '', 1).isdigit():
+            continue
+
+        # trata tanto "3070" quanto "003070" como "003070"
+        valor_tratado = str(int(float(valor_bruto))).zfill(6)
+
+        if valor_tratado == numero_formatado:
+            ws.delete_rows(i + 1)  # gspread é 1-based
+            print(f"🧹 Chamado {numero_formatado} removido da lista manual.")
+            return
+
+    print(f"⚠️ Erro ao tentar remover o chamado {numero_formatado}: não encontrado.")
+
 
 #%%
 
@@ -217,7 +293,7 @@ def extrai_dados (numchamado):
     except TimeoutException:
         print("❌ Nenhum item encontrado para o chamado. Pulando.")
         return None
-        
+    
     for tentativa in range(5):
         handles_antes = set(driver.window_handles)
         try:
@@ -232,6 +308,14 @@ def extrai_dados (numchamado):
     else:
         print("❌ Todas as tentativas falharam. Pulando chamado.")
         return None
+    
+    dados_dos_chamados = {}
+    
+    titulo_element = WebDriverWait(driver, 10).until(
+    EC.presence_of_element_located((By.XPATH, '//*[@id="headerTitle"]'))
+    )
+    titulo_completo = titulo_element.text.strip()
+    titulo_limpo = titulo_completo.split(" - ", 1)[1] if " - " in titulo_completo else ""
         
     # Troca para o frame
     WebDriverWait(driver, 50).until(
@@ -251,9 +335,13 @@ def extrai_dados (numchamado):
             sleep(2)    
         
     # Espera e entra no iframe
-    WebDriverWait(driver, 100).until(
-        EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
-    )
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
+        )
+    except TimeoutException:
+        print("❌ Frame não carregou. Pulando chamado.")
+        return None
     
     #Modalidade de Aquisição
     modalidade_map = {
@@ -289,14 +377,14 @@ def extrai_dados (numchamado):
     ]
     
     print("Dados do chamado ", numchamado, " extraídos.")
-    
-    dados_dos_chamados = {}
-            
+                
     for nome, xpath in campos:
         element = WebDriverWait(driver, 100).until(
             EC.presence_of_element_located((By.XPATH, xpath))
         )
         dados_dos_chamados[nome] = element.get_attribute("value")
+    
+    dados_dos_chamados["Descrição"] = titulo_limpo
     
     valor_final = dados_dos_chamados.get("Valor Final")
     valor_inicial = dados_dos_chamados.get("Valor Inicial")
@@ -304,7 +392,7 @@ def extrai_dados (numchamado):
     
     codigo_modalidade = dados_dos_chamados.get("Modalidade")
     dados_dos_chamados["Modalidade"] = modalidade_map.get(codigo_modalidade, codigo_modalidade)
-         
+             
     for janela in driver.window_handles:
         if janela != janela_principal:
             driver.switch_to.window(janela)
@@ -315,11 +403,6 @@ def extrai_dados (numchamado):
     return dados_dos_chamados
 
 #%% Google Sheets
-
-gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()), 'crested-century-386316-01c90985d6e4.json'))
-
-spreadsheet = gc.open("Acompanhamento_Aquisições_Teste")
-worksheet = spreadsheet.worksheet("Dados")
 
 def adicionar_gsheet():
     print(f"Adicionando dados à planilha {spreadsheet.title}...")
@@ -359,24 +442,128 @@ cabecalhos_esperados = ["Unidade", "Data Aprovação GP", "Identificador", "Ativ
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
 linhas_existentes = worksheet.get_all_values()
+
 mapa_identificador_linha = {
-    str(linha[2]): idx + 1  # col 2 = "Identificador", +1 porque gspread começa em 1
-    for idx, linha in enumerate(linhas_existentes[1:])  # pula cabeçalho
-    if len(linha) > 2  # ignora linhas incompletas
+    str(int(float(linha[2]))).zfill(6): idx + 1
+    for idx, linha in enumerate(linhas_existentes[1:])
+    if len(linha) > 2 and linha[2].replace('.', '', 1).isdigit()
 }
 
 hoje = datetime.now().strftime("%d/%m/%Y")
 
 pares_ja_processados = {
-    (str(linha["Identificador"]), linha["Atividade Habilitada"]) for linha in valores_existentes
+    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
 }
 
+# Primeiro: processa chamados manuais
+print("📌 Iniciando extração de chamados manuais...")
+chamados_extraidos_com_sucesso = []
+
+#Verifica dados a extrair manualmente e dados a ignorar
+for idx, numero in enumerate(lista_manuais):
+    numero_formatado = str(int(float(numero))).zfill(6)
+    
+    if numero_formatado in lista_ignorar:
+        print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} está na lista de ignorados. Pulando e removendo da lista manual.")
+        remover_chamado_manuais(worksheet_manuais, numero_formatado)
+        continue
+
+    if (numero_formatado, "Chamado Encerrado") in pares_ja_processados:
+        print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} já encerrado. Pulando extração.")
+        remover_chamado_manuais(worksheet_manuais, numero_formatado)
+        continue
+
+    atividade = df.loc[
+        df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6)) == numero_formatado,
+        "AtividadeHabilitadaFiltrada"
+    ]
+    atividade_habilitada = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
+
+    print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero_formatado}")
+    dados_dos_chamados = extrai_dados(numero_formatado)
+    
+    #atividade = df.loc[df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6)) == numero, "AtividadeHabilitadaFiltrada"]
+    #atividade_habilitada = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
+
+    # Se já estiver encerrado na planilha, não extrai
+    # if (numero, "Chamado Encerrado") in pares_ja_processados:
+    #     print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero} já encerrado. Pulando extração.")
+    #     chamados_extraidos_com_sucesso.append(numero)
+    #     continue
+
+    # print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero}")
+    # dados_dos_chamados = extrai_dados(numero)
+
+    if dados_dos_chamados:
+        for col in ["Justificativa", "Justificativa GP"]:
+            if isinstance(dados_dos_chamados.get(col), str):
+                dados_dos_chamados[col] = dados_dos_chamados[col].replace('\n', ' ').strip()
+
+        #dados_dos_chamados["Descrição"] = ""
+        dados_dos_chamados["Atividade Habilitada"] = atividade_habilitada
+
+        if isinstance(dados_dos_chamados.get("Valor R$"), str):
+            dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
+
+        dados_dos_chamados["Data Atualização"] = hoje
+
+        linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
+        linha_existente = mapa_identificador_linha.get(numero_formatado)
+
+        if linha_existente:
+            worksheet.update(values=[linha_ordenada], range_name=f"A{linha_existente+1}")
+            print(f"🔁 Chamado {numero_formatado} atualizado na linha {linha_existente+1}.")
+        else:
+            worksheet.append_row(linha_ordenada)
+            print(f"➕ Chamado {numero_formatado} adicionado ao final da planilha.")
+
+        remover_chamado_manuais(worksheet_manuais, numero_formatado)
+
+    # if dados_dos_chamados:
+    #     for col in ["Justificativa", "Justificativa GP"]:
+    #         if isinstance(dados_dos_chamados.get(col), str):
+    #             dados_dos_chamados[col] = dados_dos_chamados[col].replace('\n', ' ').strip()
+
+    #     dados_dos_chamados["Descrição"] = ""
+    #     dados_dos_chamados["Atividade Habilitada"] = atividade_habilitada
+
+    #     if isinstance(dados_dos_chamados.get("Valor R$"), str):
+    #         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
+
+    #     dados_dos_chamados["Data Atualização"] = hoje
+
+    #     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
+    #     linha_existente = mapa_identificador_linha.get(numero)
+
+    #     if linha_existente:
+    #         worksheet.update(values=[linha_ordenada], range_name=f"A{linha_existente+1}")
+    #         print(f"🔁 Chamado {numero} atualizado na linha {linha_existente+1}.")
+    #     else:
+    #         worksheet.append_row(linha_ordenada)
+    #         print(f"➕ Chamado {numero} adicionado ao final da planilha.")
+
+    #     remover_chamado_manuais(worksheet_manuais, numero)
+
+# # Remove chamados processados do Excel manual
+# if chamados_extraidos_com_sucesso:
+#     df_manuais_filtrado = df_manuais[~df_manuais[0].astype(str).apply(lambda x: str(int(float(x))).zfill(6)).isin(chamados_extraidos_com_sucesso)]
+#     df_manuais_filtrado.to_excel(r"C:\RPA\se_suite_xls\chamados_extrair_manual.xlsx", header=False, index=False)
+#     print(f"🧹 {len(chamados_extraidos_com_sucesso)} chamados removidos da lista manual.")
+
+# Segue com os chamados automáticos
 for idx, numero in enumerate(num_chamados):
-    if (str(numero), atividadehabilitada[idx]) in pares_ja_processados:
+    #if (str(numero), atividadehabilitada[idx]) in pares_ja_processados:
+    identificador_zfill = str(numero).zfill(6)
+    
+    if identificador_zfill in lista_ignorar:
+        print(f"[{idx+1}/{len(num_chamados)}] Chamado {identificador_zfill} está na lista de ignorados. Pulando.")
+        continue
+    
+    if (identificador_zfill, atividadehabilitada[idx]) in pares_ja_processados:
         print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} sem alteração de status. Pulando.")
         continue
 
-    print(f"[{idx+1}/{len(num_chamados)}] Acessando chamado {numero}")
+    print(f"[{idx+1}/{len(num_chamados)}] Acessando chamado {identificador_zfill}")
     dados_dos_chamados = extrai_dados(numero)
 
     if dados_dos_chamados:
