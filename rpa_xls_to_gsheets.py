@@ -68,30 +68,30 @@ login_sesuite()
 
 janela_principal = driver.window_handles[0]
 
-WebDriverWait(driver, 30).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
 
-sleep(1)
+sleep(2)
 
 driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=tracking,104,2')
 
-WebDriverWait(driver, 30).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
 
 sleep(1)
 
-WebDriverWait(driver, 10).until(
+WebDriverWait(driver, 100).until(
     EC.frame_to_be_available_and_switch_to_it((By.ID, "iframe"))
 )
 
 sleep(1)
 
 # botão seta
-botao_seta = WebDriverWait(driver, 10).until(
+botao_seta = WebDriverWait(driver, 100).until(
     EC.element_to_be_clickable((By.ID, "se_admin_btnreport-menuButton"))
 )
 botao_seta.click()
 
 # "Exportar para Excel"
-botao_exportar = WebDriverWait(driver, 10).until(
+botao_exportar = WebDriverWait(driver, 100).until(
     EC.element_to_be_clickable((By.XPATH, '//span[contains(text(), "Exportar para Excel")]'))
 )
 botao_exportar.click()
@@ -165,27 +165,6 @@ else:
 
 #Lê arquivo baixado do SE Suite
 df = pd.read_excel(r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
-
-# # Leitura da lista de chamados manuais e chamados a ignorar
-# df_manuais = pd.read_excel(r"C:\RPA\se_suite_xls\chamados_extrair_manual.xlsx", header=None)
-# df_ignorar = pd.read_excel(r"C:\RPA\se_suite_xls\chamados_ignorar.xlsx", header=None)
-
-# # Limpa e converte os valores
-# if not df_manuais.empty and 0 in df_manuais.columns:
-#     lista_manuais = df_manuais[0].dropna().apply(
-#         lambda x: str(int(float(x))).zfill(6) if str(x).replace('.', '', 1).isdigit() else None
-#     ).dropna().tolist()
-# else:
-#     lista_manuais = []
-
-# if not df_ignorar.empty and 0 in df_ignorar.columns:
-#     lista_ignorar = set(
-#         df_ignorar[0].dropna().apply(
-#             lambda x: str(int(float(x))).zfill(6) if str(x).replace('.', '', 1).isdigit() else None
-#         ).dropna().tolist()
-#     )
-# else:
-#     lista_ignorar = set()
 
 # Acessa as abas "Manuais" e "Ignorar" da mesma planilha
 worksheet_manuais = spreadsheet.worksheet("Manuais")
@@ -286,7 +265,7 @@ def extrai_dados (numchamado):
     print("Aguardando SE Suite...")
         
     try:
-        primeiro_item = WebDriverWait(driver, 60).until(
+        primeiro_item = WebDriverWait(driver, 200).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
         )
         print("Chamado localizado. Extraindo dados...")
@@ -316,7 +295,13 @@ def extrai_dados (numchamado):
     )
     titulo_completo = titulo_element.text.strip()
     titulo_limpo = titulo_completo.split(" - ", 1)[1] if " - " in titulo_completo else ""
-        
+    
+    # Status do chamado
+    status_element = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.XPATH, '//*[@id="statusTextSpan"]'))
+    )
+    status_texto = status_element.text.strip()
+            
     # Troca para o frame
     WebDriverWait(driver, 50).until(
         EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
@@ -400,6 +385,8 @@ def extrai_dados (numchamado):
 
     driver.switch_to.window(janela_principal)
     
+    dados_dos_chamados["Status"] = status_texto
+    
     return dados_dos_chamados
 
 #%% Google Sheets
@@ -468,31 +455,28 @@ for idx, numero in enumerate(lista_manuais):
         remover_chamado_manuais(worksheet_manuais, numero_formatado)
         continue
 
-    if (numero_formatado, "Chamado Encerrado") in pares_ja_processados:
+    if (numero_formatado, "Encerrado") in pares_ja_processados or (numero_formatado, "Cancelado") in pares_ja_processados:
+    #if (numero_formatado, "Chamado Encerrado") in pares_ja_processados:
         print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} já encerrado. Pulando extração.")
         remover_chamado_manuais(worksheet_manuais, numero_formatado)
         continue
-
+        
+    print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero_formatado}")
+    dados_dos_chamados = extrai_dados(numero_formatado)
+    
+    # ⛔ Se a extração falhou, pula e mantém o chamado na lista
+    if dados_dos_chamados is None:
+        print(f"⚠️ Chamado {numero_formatado} não pôde ser extraído. Mantendo na lista manual.")
+        continue
+    
     atividade = df.loc[
         df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6)) == numero_formatado,
         "AtividadeHabilitadaFiltrada"
     ]
-    atividade_habilitada = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
-
-    print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero_formatado}")
-    dados_dos_chamados = extrai_dados(numero_formatado)
+    atividade_df = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
     
-    #atividade = df.loc[df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6)) == numero, "AtividadeHabilitadaFiltrada"]
-    #atividade_habilitada = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
-
-    # Se já estiver encerrado na planilha, não extrai
-    # if (numero, "Chamado Encerrado") in pares_ja_processados:
-    #     print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero} já encerrado. Pulando extração.")
-    #     chamados_extraidos_com_sucesso.append(numero)
-    #     continue
-
-    # print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero}")
-    # dados_dos_chamados = extrai_dados(numero)
+    status_texto = dados_dos_chamados.get("Status", "")
+    atividade_habilitada = status_texto if status_texto in ["Encerrado", "Cancelado"] else atividade_df
 
     if dados_dos_chamados:
         for col in ["Justificativa", "Justificativa GP"]:
@@ -518,37 +502,6 @@ for idx, numero in enumerate(lista_manuais):
             print(f"➕ Chamado {numero_formatado} adicionado ao final da planilha.")
 
         remover_chamado_manuais(worksheet_manuais, numero_formatado)
-
-    # if dados_dos_chamados:
-    #     for col in ["Justificativa", "Justificativa GP"]:
-    #         if isinstance(dados_dos_chamados.get(col), str):
-    #             dados_dos_chamados[col] = dados_dos_chamados[col].replace('\n', ' ').strip()
-
-    #     dados_dos_chamados["Descrição"] = ""
-    #     dados_dos_chamados["Atividade Habilitada"] = atividade_habilitada
-
-    #     if isinstance(dados_dos_chamados.get("Valor R$"), str):
-    #         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
-
-    #     dados_dos_chamados["Data Atualização"] = hoje
-
-    #     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
-    #     linha_existente = mapa_identificador_linha.get(numero)
-
-    #     if linha_existente:
-    #         worksheet.update(values=[linha_ordenada], range_name=f"A{linha_existente+1}")
-    #         print(f"🔁 Chamado {numero} atualizado na linha {linha_existente+1}.")
-    #     else:
-    #         worksheet.append_row(linha_ordenada)
-    #         print(f"➕ Chamado {numero} adicionado ao final da planilha.")
-
-    #     remover_chamado_manuais(worksheet_manuais, numero)
-
-# # Remove chamados processados do Excel manual
-# if chamados_extraidos_com_sucesso:
-#     df_manuais_filtrado = df_manuais[~df_manuais[0].astype(str).apply(lambda x: str(int(float(x))).zfill(6)).isin(chamados_extraidos_com_sucesso)]
-#     df_manuais_filtrado.to_excel(r"C:\RPA\se_suite_xls\chamados_extrair_manual.xlsx", header=False, index=False)
-#     print(f"🧹 {len(chamados_extraidos_com_sucesso)} chamados removidos da lista manual.")
 
 # Segue com os chamados automáticos
 for idx, numero in enumerate(num_chamados):
