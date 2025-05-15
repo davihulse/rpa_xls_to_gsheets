@@ -37,7 +37,7 @@ driver = Chrome(options=options)
 #Dados Google Sheets
 gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()), 'crested-century-386316-01c90985d6e4.json'))
 
-spreadsheet = gc.open("Acompanhamento_Aquisições_Teste")
+spreadsheet = gc.open("Acompanhamento_Aquisições_RPA")
 worksheet = spreadsheet.worksheet("Dados")
 
 
@@ -141,7 +141,8 @@ desbloquear_arquivo_excel(caminho)
 #%%
 
 def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
-    excel = win32.gencache.EnsureDispatch('Excel.Application')
+    excel = win32.DispatchEx('Excel.Application')  # cria nova instância
+    #excel = win32.gencache.EnsureDispatch('Excel.Application')
     excel.Visible = False  # Excel rodando "invisível"
     excel.DisplayAlerts = False  # Evita pop-ups e confirmações
 
@@ -220,6 +221,7 @@ df = df.iloc[1:].reset_index(drop=True)
 df = df.drop(columns=['P', 'S', 'SW', 'SLA', 'PR', 'D', 'A', 'Executor', 'Processo', 'Tipo de workflow'])
 #df = df[~df["Atividade habilitada"].str.startswith("Confirmar recebimento  do item solicitado", na=False)]
 #df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da solicitação", na=False)]
+df = df[~df["Atividade habilitada"].str.startswith("Solicitar aquisição", na=False)]
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
@@ -473,10 +475,10 @@ for idx, numero in enumerate(lista_manuais):
         df["Identificador"].apply(lambda x: str(int(float(x))).zfill(6)) == numero_formatado,
         "AtividadeHabilitadaFiltrada"
     ]
-    atividade_df = atividade.values[0] if not atividade.empty else "Chamado Encerrado"
+    atividade_df = atividade.values[0] if not atividade.empty else "Indefinida"
     
     status_texto = dados_dos_chamados.get("Status", "")
-    atividade_habilitada = status_texto if status_texto in ["Encerrado", "Cancelado"] else atividade_df
+    atividade_habilitada = status_texto if status_texto in ["Encerrado", "Cancelado", "Suspenso"] else atividade_df
 
     if dados_dos_chamados:
         for col in ["Justificativa", "Justificativa GP"]:
