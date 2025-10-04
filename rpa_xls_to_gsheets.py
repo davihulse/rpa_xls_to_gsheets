@@ -181,13 +181,17 @@ else:
 #Lê arquivo baixado do SE Suite
 df = pd.read_excel(r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 
-# Acessa as abas "Manuais" e "Ignorar" da mesma planilha
+# Acessa as abas "Manuais", "Ignorar" e "ANS" da mesma planilha
 worksheet_manuais = spreadsheet.worksheet("Manuais")
 worksheet_ignorar = spreadsheet.worksheet("Ignorar")
+worksheet_ans = spreadsheet.worksheet("ANS")
 
-# Lê os valores da coluna A (sem cabeçalho)
+# Lê os valores das abas coluna A (sem cabeçalho)
 valores_manuais = worksheet_manuais.col_values(1)
 valores_ignorar = worksheet_ignorar.col_values(1)
+
+# Lê as colunas A e B (ANS)
+valores_ans = worksheet_ans.get_all_values()
 
 # Aplica validação e conversão com zfill(6)
 lista_manuais = [
@@ -203,6 +207,13 @@ lista_ignorar = set(
     for x in valores_ignorar
     if str(x).replace('.', '', 1).isdigit()
 )
+
+# Cria dicionário {Identificador: ANS} para ANS
+mapa_ans_custom = {
+    str(int(float(linha[0]))).zfill(6): linha[1]
+    for linha in valores_ans
+    if len(linha) >= 2 and linha[0].replace('.', '', 1).isdigit()
+}
 
 def remover_chamado_manuais(ws, numero_formatado):
     
@@ -427,6 +438,11 @@ def extrai_dados (numchamado):
     
     #Modalidade de Aquisição
     modalidade_map = {
+    "bffd0ab8a3d83f081dfa79349ad4aa61": "ANS 13 Dias",
+    "2e10d54dc4f9894e2b9a5917c4d0cd9c": "ANS 20 Dias",    
+    "8f39e461ca98e4a2624e55564c613609": "ANS 30 Dias",
+    "10418b61418c571e2c49ef89c5dcaf64": "ANS 4 Dias",
+    "6b0f275b249de45d41617e1044e7b725": "ANS 8 Dias",
     "d2801b01f3eafc41709cbb42567ab8c0": "AQUISIÇÃO DIRETA",
     "548b6278c989e3fa6efa6c46dc292848": "AVALIAÇÃO COMPETITIVA (EMBRAPII)",
     "6c9c19595306f579a3bf2eb4d2bd9972": "COMPRA SIMPLIFICADA",
@@ -628,24 +644,65 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
 
     dados_dos_chamados["Data Atualização"] = hoje
-    
-    # Cálculo do ANS
-    apoio = dados_dos_chamados.get("Apoio Consultivo")
-    tipo = dados_dos_chamados.get("Tipo Item")
-    
-    ans_map = {
-        ("Não", "Produto Internacional"): 6,
-        ("Não", "Produto Nacional"): 5,
-        ("Não", "Serviço Internacional"): 6,
-        ("Não", "Serviço Nacional"): 5,
-        ("Sim", "Produto Internacional"): 30,
-        ("Sim", "Produto Nacional"): 20,
-        ("Sim", "Serviço Internacional"): 30,
-        ("Sim", "Serviço Nacional"): 20
-    }
-    
-    dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
+    # Cálculo do ANS com 3 níveis de prioridade:
+    # 1. Se existir na aba ANS
+    # 2. Se modalidade tiver dias no nome
+    # 3. Regra padrão por Apoio + Tipo
+
+    identificador_zfill = str(identificador).zfill(6)
+
+    if identificador_zfill in mapa_ans_custom:
+        try:
+            ans_valor = float(mapa_ans_custom[identificador_zfill])
+            if ans_valor.is_integer():
+                ans_valor = int(ans_valor)
+            dados_dos_chamados["ANS"] = ans_valor
+        except:
+            dados_dos_chamados["ANS"] = mapa_ans_custom[identificador_zfill]
+    else:
+        modalidade = dados_dos_chamados.get("Modalidade", "")
+        ans_por_modalidade = {
+            "ANS 13 Dias": 13,
+            "ANS 20 Dias": 20,
+            "ANS 30 Dias": 30,
+            "ANS 4 Dias": 4,
+            "ANS 8 Dias": 8
+        }
+
+        if modalidade in ans_por_modalidade:
+            dados_dos_chamados["ANS"] = ans_por_modalidade[modalidade]
+        else:
+            apoio = dados_dos_chamados.get("Apoio Consultivo")
+            tipo = dados_dos_chamados.get("Tipo Item")
+            ans_map = {
+                ("Não", "Produto Internacional"): 6,
+                ("Não", "Produto Nacional"): 5,
+                ("Não", "Serviço Internacional"): 6,
+                ("Não", "Serviço Nacional"): 5,
+                ("Sim", "Produto Internacional"): 30,
+                ("Sim", "Produto Nacional"): 20,
+                ("Sim", "Serviço Internacional"): 30,
+                ("Sim", "Serviço Nacional"): 20
+            }
+            dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
+
+    # Cálculo do ANS
+    # apoio = dados_dos_chamados.get("Apoio Consultivo")
+    # tipo = dados_dos_chamados.get("Tipo Item")
+    
+    # ans_map = {
+    #     ("Não", "Produto Internacional"): 6,
+    #     ("Não", "Produto Nacional"): 5,
+    #     ("Não", "Serviço Internacional"): 6,
+    #     ("Não", "Serviço Nacional"): 5,
+    #     ("Sim", "Produto Internacional"): 30,
+    #     ("Sim", "Produto Nacional"): 20,
+    #     ("Sim", "Serviço Internacional"): 30,
+    #     ("Sim", "Serviço Nacional"): 20
+    # }
+    
+    # dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
     linha_existente = mapa_identificador_linha.get(identificador)
@@ -676,17 +733,16 @@ for idx, numero in enumerate(lista_manuais):
         remover_chamado_manuais(worksheet_manuais, numero_formatado)
         continue
 
-    atividades_para_ignorar = ["Encerrado", "Cancelado", "Confirmar recebimento  do item solicitado"]
+    # Esta parte havia sido incluída para apoiar na inserção de muitos dados na planilha
+    # Pulando chamados que já haviam sido finalizados. 
+    #
+    #atividades_para_ignorar = ["Encerrado", "Cancelado", "Confirmar recebimento  do item solicitado"]
     
-    if any((numero_formatado, atividade) in pares_ja_processados for atividade in atividades_para_ignorar):
-        print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} já encerrado ou em etapa final. Pulando extração.")
-        remover_chamado_manuais(worksheet_manuais, numero_formatado)
-        continue
+    #if any((numero_formatado, atividade) in pares_ja_processados for atividade in atividades_para_ignorar):
+    #    print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} já encerrado ou em etapa final. Pulando extração.")
+    #    remover_chamado_manuais(worksheet_manuais, numero_formatado)
+    #    continue
 
-    # if (numero_formatado, "Encerrado") in pares_ja_processados or (numero_formatado, "Cancelado") in pares_ja_processados:
-    #     print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Chamado {numero_formatado} já encerrado. Pulando extração.")
-    #     remover_chamado_manuais(worksheet_manuais, numero_formatado)
-    #     continue
         
     print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero_formatado}")
     dados_dos_chamados = extrai_dados(numero_formatado)
@@ -803,19 +859,3 @@ print("Finalizando...")
 sleep(3)
 
 #%%        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
