@@ -31,6 +31,8 @@ options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-gpu")
 options.add_argument("--disable-notifications")
 options.add_argument("--disable-gcm-registration")
+options.add_experimental_option("excludeSwitches", ["enable-logging"])
+options.add_argument("--log-level=3")  # reduz nível de log do Chrome
 
 options.add_experimental_option("prefs", {
     "download.default_directory": r"C:\RPA\se_suite_xls",
@@ -39,7 +41,7 @@ options.add_experimental_option("prefs", {
     "safebrowsing.enabled": True
 })
 
-options.add_experimental_option("excludeSwitches", ["enable-logging"])
+#options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
 service = Service(log_path="NUL")
 
