@@ -296,8 +296,9 @@ def extrai_dados (numchamado):
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=home')
     
     janela_principal = driver.window_handles[0]
-    
+ 
     xpaths_input = [
+        '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[1]/input',
         '//*[@id="st-container"]/div/div[1]/div/div[1]/ul[3]/div/div/div[1]/input',
         '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[2]/input'
     ]
