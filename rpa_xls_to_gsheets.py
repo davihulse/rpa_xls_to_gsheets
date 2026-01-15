@@ -21,8 +21,6 @@ import win32com.client as win32
 import gspread
 import csv
 
-
-
 #%%
 
 options = Options()
@@ -52,6 +50,47 @@ gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()),
 
 spreadsheet = gc.open("Acompanhamento_Aquisições_RPA")
 worksheet = spreadsheet.worksheet("Dados")
+
+spreadsheet_proj_fin = gc.open("proj_fin")
+worksheet_proj_fin = spreadsheet_proj_fin.worksheet("Auxiliar")
+
+dados_proj_fin = worksheet_proj_fin.get_all_records()
+auxiliar_proj_fin = pd.DataFrame(dados_proj_fin)
+
+# def obter_apelido_projeto(nome_projeto):
+#     if nome_projeto in ["Annelida2 - ISI SE", "Annelida2 - ISI SM"]:
+#         return "Annelida 2"
+
+#     apelido = auxiliar_proj_fin.loc[
+#         auxiliar_proj_fin["nm_projeto"] == nome_projeto, "nm_apelido_projeto"
+#     ]
+
+#     return apelido.values[0] if not apelido.empty else ""
+
+def obter_apelido_projeto(codigo_extraido):
+    if not codigo_extraido:
+        return ""
+
+    try:
+        codigo_extraido_int = int(float(codigo_extraido))
+    except:
+        return ""
+
+    linha = auxiliar_proj_fin.loc[
+        auxiliar_proj_fin["cd_projeto"] == codigo_extraido_int
+    ]
+
+    if linha.empty:
+        return ""
+
+    #nome_projeto_planilha = linha.iloc[0].get("nm_projeto", "")
+    apelido = linha.iloc[0].get("nm_apelido_projeto", "")
+
+    if apelido in ["Annelida2 - ISI SE", "Annelida2 - ISI SM"]:
+        return "Annelida 2"
+
+    return apelido
+
 
 
 def login_sesuite():
@@ -286,7 +325,6 @@ def tratar_alerta(driver):
             return True
         except:
             return False
-
 
 #%%
 
@@ -601,12 +639,12 @@ def adicionar_gsheet():
 todos_os_dados = []
 
 cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Identificador",
-                        "Atividade Habilitada", "Nome Projeto", "Descrição", "Fonte",
-                        "CR", "Projeto", "Conta", "Rubrica", "Valor R$", "Justificativa",
-                        "Justificativa GP", "Data Análise Célula", "Analista", "Modalidade",
-                        "Apoio Consultivo", "Necessita Contrato", "Tipo Item", "ANS",
-                        "Processo Compra Finalizado", "Data Aprovação Técnica",
-                        "Ordem de Compra", "Data Prevista Recebimento", "Data Atualização"]
+                        "Atividade Habilitada", "Nome Projeto", "Apelido Projeto",
+                        "Descrição", "Fonte", "CR", "Projeto", "Conta", "Rubrica",
+                        "Valor R$", "Justificativa", "Justificativa GP", "Data Análise Célula",
+                        "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
+                        "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
+                        "Ordem de Compra", "Data Prevista Recebimento"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
@@ -642,11 +680,16 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
     dados_dos_chamados["Descrição"] = descricao
 
     dados_dos_chamados["Atividade Habilitada"] = atividade
+    
+    #Inserir apelido do projeto
+    codigo_projeto_extraido = dados_dos_chamados.get("Projeto", "")
+    dados_dos_chamados["Apelido Projeto"] = obter_apelido_projeto(codigo_projeto_extraido)
+
 
     if isinstance(dados_dos_chamados.get("Valor R$"), str):
         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
 
-    dados_dos_chamados["Data Atualização"] = hoje
+    #dados_dos_chamados["Data Atualização"] = hoje
 
     # Cálculo do ANS com 3 níveis de prioridade:
     # 1. Se existir na aba ANS
