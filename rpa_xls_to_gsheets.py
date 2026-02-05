@@ -20,6 +20,7 @@ import ctypes
 import win32com.client as win32
 import gspread
 import csv
+from bs4 import BeautifulSoup
 
 #%%
 
@@ -206,9 +207,9 @@ caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
 
 
 ### Comentar as 3 linhas abaixo para pular o download do XLS.
-baixar_xls()
-desbloquear_arquivo_excel(caminho)
-converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
+#baixar_xls()
+#desbloquear_arquivo_excel(caminho)
+#converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 
 
 if os.path.exists(caminho):
@@ -594,6 +595,259 @@ def extrai_dados (numchamado):
     
     codigo_unidade = dados_dos_chamados.get("Unidade")
     dados_dos_chamados["Código Unidade"] = unidade_map.get(codigo_unidade, codigo_unidade)
+
+
+    ### HISTÓRICO
+    # Volta para Rubbonframe para acessar histórico (ver se precisa dessa parte - Sim, precisa!)
+    driver.switch_to.default_content()
+    
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
+        )
+    except TimeoutException:
+        return None
+    
+    # Clica no botão "Histórico"
+    for tentativa in range(3):
+        try:
+            botao = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, '//span[text()="Histórico"]/ancestor::a'))
+            )
+            botao.click()
+            break
+        except:
+            sleep(2) 
+            
+    sleep(2)    
+
+    ### Salvar
+    # with open("html_debug.html", "w", encoding="utf-8") as f:
+    #     f.write(driver.page_source)
+        
+
+    
+    
+    # #DEBUG: Salvar cada iframe como HTML para inspeção.
+    # driver.switch_to.default_content()
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    
+    # for i, iframe in enumerate(iframes):
+    #     nome = iframe.get_attribute("name") or iframe.get_attribute("id") or f"iframe_{i}"
+    #     nome = nome.replace("/", "_").replace("\\", "_")
+    
+    #     try:
+    #         driver.switch_to.frame(iframe)
+    #         html = driver.page_source
+    #         with open(f"{nome}.html", "w", encoding="utf-8") as f:
+    #             f.write(html)
+    #         print(f"✅ {nome}.html salvo com sucesso.")
+    
+    #         # Tenta capturar iframes internos
+    #         iframes_internos = driver.find_elements(By.TAG_NAME, "iframe")
+    #         for j, iframe_interno in enumerate(iframes_internos):
+    #             nome_interno = iframe_interno.get_attribute("name") or iframe_interno.get_attribute("id") or f"{nome}_interno_{j}"
+    #             nome_interno = nome_interno.replace("/", "_").replace("\\", "_")
+    #             try:
+    #                 driver.switch_to.frame(iframe_interno)
+    #                 html_interno = driver.page_source
+    #                 with open(f"{nome_interno}.html", "w", encoding="utf-8") as f:
+    #                     f.write(html_interno)
+    #                 print(f"✅ {nome_interno}.html salvo com sucesso.")
+    #                 driver.switch_to.parent_frame()
+    #             except Exception as e:
+    #                 print(f"❌ Erro ao salvar iframe interno {nome_interno}: {e}")
+    #         driver.switch_to.parent_frame()
+    #     except Exception as e:
+    #         print(f"❌ Erro ao salvar iframe {nome}: {e}")
+    #         driver.switch_to.default_content()
+    # #/DEBUG: Salvar cada iframe como HTML para inspeção.
+
+
+
+    # Volta ao default e entra no iframe correto
+    #driver.switch_to.default_content()
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "iframe_history"))
+        )
+        print("🎯 Entrou no iframe_history")
+    except TimeoutException:
+        print("❌ Não conseguiu acessar o iframe 'iframe_history'.")
+        return None
+    
+    # Clica no botão "Exibir histórico completo"
+    try:
+        botao = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[starts-with(@id, "history")]/div/span/div/div/div/span[contains(text(), "Exibir histórico")]'))
+        )
+        botao.click()
+        print("✅ Botão 'Exibir histórico completo' clicado.")
+    except TimeoutException:
+        print("❌ Botão 'Exibir histórico completo' não clicável.")
+        return None
+
+
+
+
+    
+    # Aguarda conteúdo do histórico aparecer
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "timelineItem")))
+    
+    # Coleta HTML do iframe e analisa com BeautifulSoup
+    html_history = driver.page_source
+    soup = BeautifulSoup(html_history, 'html.parser')
+    
+    data_conclusao_processo = None
+    
+    # Percorre os blocos de histórico
+    for item in soup.select("div.timelineItem"):
+        descricao_raw = item.select_one("div.description")
+        if not descricao_raw:
+            continue
+    
+        texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
+        texto_normalizado = texto.replace("  ", " ").strip().lower()
+    
+        if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
+            # Extrai a data do cabeçalho
+            header = item.select_one("div.timelineItemContentHeader")
+            if header:
+                data_conclusao_processo = header.get_text(strip=True).split()[-3][-10:] #Últimos tokens são hora [-1]; hifen [-2]; data [-3]
+            break
+
+
+
+
+
+
+    
+    # # Aguarda renderização de ao menos 1 item do histórico
+    # try:
+    #     WebDriverWait(driver, 15).until(
+    #         EC.presence_of_element_located((By.CLASS_NAME, "timelineItem"))
+    #     )
+    #     print("✅ Histórico carregado com sucesso.")
+    # except TimeoutException:
+    #     print("❌ Histórico não carregado após o clique.")
+    #     return None
+
+
+
+    # # Exporta HTML completo do iframe de histórico
+    # try:
+    #     html_history = driver.page_source
+    #     with open("iframe_history_renderizado.html", "w", encoding="utf-8") as f:
+    #         f.write(html_history)
+    #     print("📄 HTML do histórico salvo como 'iframe_history_renderizado.html'.")
+    # except Exception as e:
+    #     print(f"❌ Erro ao salvar HTML do histórico: {e}")
+
+
+    # ########## DEBUG 1
+    # #driver.switch_to.default_content()
+    
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    # print("DEBUG 1")
+    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
+    # for i, iframe in enumerate(iframes):
+    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
+    # ######### /DEBUG1
+    
+    
+    
+    # print("\n🔎 PREVIEW DOS IFRAMES (1000 primeiros caracteres)\n")
+    
+    # for i, iframe in enumerate(iframes):
+    #     nome = iframe.get_attribute("name")
+    #     iframe_id = iframe.get_attribute("id")
+    
+    #     try:
+    #         driver.switch_to.frame(iframe)
+    #         html = driver.page_source
+    #         preview = html.replace("\n", " ").replace("\r", " ")[:1000]
+    #         print(f"[{i}] name={nome} | id={iframe_id}")
+    #         print(f"    {preview}\n")
+    #     except Exception as e:
+    #         print(f"[{i}] name={nome} | id={iframe_id}")
+    #         print("    ❌ Erro ao acessar iframe\n")
+    #     finally:
+    #         driver.switch_to.parent_frame()    
+        
+        
+    
+    # # Espera e entra no iframe
+    # try:
+    #     WebDriverWait(driver, 10).until(
+    #         EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076ec2bfde016ec67ac8f27f4a"))
+    #     )
+    # except:
+    #     print("❌ Frame não carregou.")
+    #     return None    
+    
+        
+    # try:
+    #     botao_hist_completo = WebDriverWait(driver, 10).until(
+    #         EC.element_to_be_clickable((By.XPATH, '//*[@id="history2014731438"]/div/span/div/div/div/span'))
+    #     )
+    #     botao_hist_completo.click()
+    #     print("✅ Botão 'Exibir histórico completo' clicado.")
+    # except TimeoutException:
+    #     print("❌ Botão 'Histórico completo não encontrado. Pulando chamado.")
+    #     return None       
+    
+    
+    
+    
+    # # Itera nos iframes internos do ribbonFrame
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    # for iframe in iframes:
+    #     nome = iframe.get_attribute("name")
+    #     if nome and nome.startswith("efms_grid_"):
+    #         try:
+    #             driver.switch_to.frame(iframe)
+    #             botao = WebDriverWait(driver, 20).until(
+    #                 EC.element_to_be_clickable((By.ID, "history1571906314"))
+    #             )
+    #             botao.click()
+    #             print("✅ Botão 'Exibir histórico completo' clicado.")
+    #             break
+    #         except:
+    #             driver.switch_to.parent_frame()
+    # else:
+    #     print("❌ Botão 'Exibir histórico completo' não encontrado em nenhum iframe.")
+    #     return None
+
+
+    # ########## DEBUG 2
+    # #driver.switch_to.default_content()
+    
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    # print("DEBUG 2")
+    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
+    # for i, iframe in enumerate(iframes):
+    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
+    # ########## /DEBUG2
+
+
+    ########## DEBUG 2
+
+    ########## /DEBUG
+
+
+    # #Botão Histórico Completo
+    # try:
+    #     botao_exibir_historico = WebDriverWait(driver, 10).until(
+    #         EC.element_to_be_clickable((By.XPATH, '//span[text()="Exibir histórico completo"]'))
+    #     )
+    #     botao_exibir_historico.click()
+    # except TimeoutException:
+    #     print("❌ Botão 'Exibir histórico completo' não clicável.")
+    #     return None
+
+
+
                  
     for janela in driver.window_handles:
         if janela != janela_principal:
@@ -603,6 +857,8 @@ def extrai_dados (numchamado):
     driver.switch_to.window(janela_principal)
     
     dados_dos_chamados["Status"] = status_texto
+    dados_dos_chamados["Data Conclusão Processo"] = data_conclusao_processo  # ← novo campo
+
     
     return dados_dos_chamados
 
@@ -644,7 +900,7 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Valor R$", "Justificativa", "Justificativa GP", "Data Análise Célula",
                         "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
-                        "Ordem de Compra", "Data Prevista Recebimento"]
+                        "Ordem de Compra", "Data Prevista Recebimento", "Data Conclusão Processo"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
