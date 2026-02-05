@@ -14,7 +14,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoAlertPresentException, UnexpectedAlertPresentException
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import ctypes
 import win32com.client as win32
@@ -207,9 +207,9 @@ caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
 
 
 ### Comentar as 3 linhas abaixo para pular o download do XLS.
-#baixar_xls()
-#desbloquear_arquivo_excel(caminho)
-#converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
+baixar_xls()
+desbloquear_arquivo_excel(caminho)
+converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 
 
 if os.path.exists(caminho):
@@ -687,22 +687,24 @@ def extrai_dados (numchamado):
     except TimeoutException:
         print("❌ Botão 'Exibir histórico completo' não clicável.")
         return None
-
-
-
-
     
     # Aguarda conteúdo do histórico aparecer
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "timelineItem")))
-    
+
+
+
+
     # Coleta HTML do iframe e analisa com BeautifulSoup
     html_history = driver.page_source
     soup = BeautifulSoup(html_history, 'html.parser')
     
     data_conclusao_processo = None
+    atividade_habilitada = None
     
-    # Percorre os blocos de histórico
-    for item in soup.select("div.timelineItem"):
+    # Percorre os blocos do histórico do mais recente para o mais antigo
+    itens = list(reversed(soup.select("div.timelineItem")))
+    
+    for idx, item in enumerate(itens):
         descricao_raw = item.select_one("div.description")
         if not descricao_raw:
             continue
@@ -710,32 +712,80 @@ def extrai_dados (numchamado):
         texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
         texto_normalizado = texto.replace("  ", " ").strip().lower()
     
+        # Regra 1: atividade confirmada e habilitada
         if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
-            # Extrai a data do cabeçalho
             header = item.select_one("div.timelineItemContentHeader")
             if header:
-                data_conclusao_processo = header.get_text(strip=True).split()[-3][-10:] #Últimos tokens são hora [-1]; hifen [-2]; data [-3]
+                tokens = header.get_text(strip=True).split()
+                if len(tokens) >= 3:
+                    terceiro_ultimo = tokens[-3]
+                    if terceiro_ultimo[-4:].lower() == "hoje":
+                        data_conclusao_processo = datetime.today().strftime("%d/%m/%Y")
+                    elif terceiro_ultimo[-4:].lower() == "ntem":
+                        data_conclusao_processo = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
+                    else:
+                        data_conclusao_processo = terceiro_ultimo[-10:]
+            break  # essa é a mais recente, pode sair
+    
+        # Regra 2: atividade cancelada + instância encerrada
+        elif (
+            "executou a atividade solicitar aquisição com a ação cancelar" in texto_normalizado
+            or "atividade solicitar aquisição executada automaticamente com a ação finalizador" in texto_normalizado
+        ):
+            status_texto = "Cancelado"
             break
 
+    # Aqui você pode adicionar mais elif com novas regras de verificação futuras
+    # elif "outra condição" in texto_normalizado:
+    #     fazer algo
 
-
-
+    # Ao final do bloco, `data_conclusao_processo` ou `atividade_habilitada` estarão preenchidos
 
 
     
-    # # Aguarda renderização de ao menos 1 item do histórico
-    # try:
-    #     WebDriverWait(driver, 15).until(
-    #         EC.presence_of_element_located((By.CLASS_NAME, "timelineItem"))
-    #     )
-    #     print("✅ Histórico carregado com sucesso.")
-    # except TimeoutException:
-    #     print("❌ Histórico não carregado após o clique.")
-    #     return None
+    # # Coleta HTML do iframe e analisa com BeautifulSoup
+    # html_history = driver.page_source
+    # soup = BeautifulSoup(html_history, 'html.parser')
+    
+    # data_conclusao_processo = None
+    
+    # # Percorre os blocos de histórico
+    # for item in reversed(soup.select("div.timelineItem")):
+    #     descricao_raw = item.select_one("div.description")
+    #     if not descricao_raw:
+    #         continue
+    
+    #     texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
+    #     texto_normalizado = texto.replace("  ", " ").strip().lower()
+
+    #     if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
+    #         header = item.select_one("div.timelineItemContentHeader")
+    #         if not header:
+    #             continue
+            
+    #         header_text = header.get_text(strip=True)
+    #         tokens = header_text.split()
+
+    #         if len(tokens) >= 3:
+    #             terceiro_ultimo = tokens[-3]
+    #             sufixo = terceiro_ultimo[-4:]
+            
+    #             if sufixo == "Hoje":
+    #                 data_conclusao_processo = datetime.today().strftime("%d/%m/%Y")
+    #             elif sufixo == "ntem":
+    #                 data_conclusao_processo = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
+    #             else:
+    #                 data_conclusao_processo = terceiro_ultimo[-10:]
+    #         else:
+    #             data_conclusao_processo = ""
+#####################################
+
+    
 
 
 
-    # # Exporta HTML completo do iframe de histórico
+    # DEBUG
+    # Exporta HTML completo do iframe de histórico
     # try:
     #     html_history = driver.page_source
     #     with open("iframe_history_renderizado.html", "w", encoding="utf-8") as f:
@@ -777,48 +827,9 @@ def extrai_dados (numchamado):
         
         
     
-    # # Espera e entra no iframe
-    # try:
-    #     WebDriverWait(driver, 10).until(
-    #         EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076ec2bfde016ec67ac8f27f4a"))
-    #     )
-    # except:
-    #     print("❌ Frame não carregou.")
-    #     return None    
-    
-        
-    # try:
-    #     botao_hist_completo = WebDriverWait(driver, 10).until(
-    #         EC.element_to_be_clickable((By.XPATH, '//*[@id="history2014731438"]/div/span/div/div/div/span'))
-    #     )
-    #     botao_hist_completo.click()
-    #     print("✅ Botão 'Exibir histórico completo' clicado.")
-    # except TimeoutException:
-    #     print("❌ Botão 'Histórico completo não encontrado. Pulando chamado.")
-    #     return None       
     
     
     
-    
-    # # Itera nos iframes internos do ribbonFrame
-    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    # for iframe in iframes:
-    #     nome = iframe.get_attribute("name")
-    #     if nome and nome.startswith("efms_grid_"):
-    #         try:
-    #             driver.switch_to.frame(iframe)
-    #             botao = WebDriverWait(driver, 20).until(
-    #                 EC.element_to_be_clickable((By.ID, "history1571906314"))
-    #             )
-    #             botao.click()
-    #             print("✅ Botão 'Exibir histórico completo' clicado.")
-    #             break
-    #         except:
-    #             driver.switch_to.parent_frame()
-    # else:
-    #     print("❌ Botão 'Exibir histórico completo' não encontrado em nenhum iframe.")
-    #     return None
-
 
     # ########## DEBUG 2
     # #driver.switch_to.default_content()
@@ -834,19 +845,6 @@ def extrai_dados (numchamado):
     ########## DEBUG 2
 
     ########## /DEBUG
-
-
-    # #Botão Histórico Completo
-    # try:
-    #     botao_exibir_historico = WebDriverWait(driver, 10).until(
-    #         EC.element_to_be_clickable((By.XPATH, '//span[text()="Exibir histórico completo"]'))
-    #     )
-    #     botao_exibir_historico.click()
-    # except TimeoutException:
-    #     print("❌ Botão 'Exibir histórico completo' não clicável.")
-    #     return None
-
-
 
                  
     for janela in driver.window_handles:
