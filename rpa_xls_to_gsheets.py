@@ -58,16 +58,6 @@ worksheet_proj_fin = spreadsheet_proj_fin.worksheet("Auxiliar")
 dados_proj_fin = worksheet_proj_fin.get_all_records()
 auxiliar_proj_fin = pd.DataFrame(dados_proj_fin)
 
-# def obter_apelido_projeto(nome_projeto):
-#     if nome_projeto in ["Annelida2 - ISI SE", "Annelida2 - ISI SM"]:
-#         return "Annelida 2"
-
-#     apelido = auxiliar_proj_fin.loc[
-#         auxiliar_proj_fin["nm_projeto"] == nome_projeto, "nm_apelido_projeto"
-#     ]
-
-#     return apelido.values[0] if not apelido.empty else ""
-
 def obter_apelido_projeto(codigo_extraido):
     if not codigo_extraido:
         return ""
@@ -93,22 +83,18 @@ def obter_apelido_projeto(codigo_extraido):
     return apelido
 
 
-
 def login_sesuite():
-    
     davpass = open(os.path.join(os.path.dirname(os.getcwd()), '.cpass'), 'r').read()    
-    
     print("Acessando SE Suite...")
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=home')
-    
     #driver.maximize_window()
-    
+
     username_input = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH,'//*[@id="userNameInput"]'))
     )
     username_input.send_keys('davi.hulse@sc.senai.br')
-    
+
     password_input = driver.find_element(By.XPATH, '//*[@id="passwordInput"]')
     password_input.send_keys(davpass + Keys.ENTER)
     
@@ -124,19 +110,16 @@ janela_principal = driver.window_handles[0]
 def baixar_xls():
     
     WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-    
-    sleep(2)
+    sleep(1)
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=tracking,104,2')
     
     WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-    
     sleep(1)
     
     WebDriverWait(driver, 100).until(
         EC.frame_to_be_available_and_switch_to_it((By.ID, "iframe"))
     )
-    
     sleep(1)
     
     # botão seta
@@ -151,7 +134,7 @@ def baixar_xls():
     )
     botao_exportar.click()
     
-    print("Baixando arquivo XLS...")
+    #print("Baixando arquivo XLS...")
     
     sleep(1)
     
@@ -161,7 +144,8 @@ def baixar_xls():
     
     while time.time() - inicio < timeout:
         if os.path.exists(caminho) and not os.path.exists(caminho + ".crdownload"):
-            print("Convertendo arquivo para XLSX...")
+            print("Baixando arquivo XLS...")
+            #print("Convertendo arquivo para XLSX...")
             break
         time.sleep(2)
     else:
@@ -191,6 +175,7 @@ def desbloquear_arquivo_excel(caminho_arquivo):
 #%%
 
 def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
+    print("Convertendo arquivo para XLSX...")
     excel = win32.DispatchEx('Excel.Application')  # cria nova instância
     #excel = win32.gencache.EnsureDispatch('Excel.Application')
     excel.Visible = False  # Excel rodando "invisível"
@@ -204,7 +189,6 @@ def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
 #%%
 
 caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
-
 
 ### Comentar as 3 linhas abaixo para pular o download do XLS.
 baixar_xls()
@@ -293,7 +277,6 @@ df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da sol
 df = df[~df["Atividade habilitada"].str.startswith("Solicitar aquisição", na=False)]
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
 
-
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
 print()
@@ -357,15 +340,6 @@ def extrai_dados (numchamado):
         print(f"❌ Não foi possível localizar o campo de busca do chamado {numchamado}. Pulando.")
         return None
     
-    # for xpath_input in xpaths_input:
-    #     try:
-    #         inserir_compra = WebDriverWait(driver, 3).until(
-    #             EC.element_to_be_clickable((By.XPATH, xpath_input))
-    #         )
-    #         break
-    #     except:
-    #         continue
-    
     inserir_compra.clear()
     sleep(1)
     inserir_compra.send_keys(str(numchamado))
@@ -403,12 +377,6 @@ def extrai_dados (numchamado):
     
     dados_dos_chamados = {}
     
-    # titulo_element = WebDriverWait(driver, 10).until(
-    # EC.presence_of_element_located((By.XPATH, '//*[@id="headerTitle"]'))
-    # )
-    # titulo_completo = titulo_element.text.strip()
-    # titulo_limpo = titulo_completo.split(" - ", 1)[1] if " - " in titulo_completo else ""
-    
     try:
         titulo_element = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//*[@id="headerTitle"]'))
@@ -428,10 +396,6 @@ def extrai_dados (numchamado):
     status_texto = status_element.text.strip()
             
     ### Troca para o frame
-    # WebDriverWait(driver, 50).until(
-    #     EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
-    # )
-    
     try:
         WebDriverWait(driver, 50).until(
             EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
@@ -539,17 +503,9 @@ def extrai_dados (numchamado):
         ("Tipo Item", '//*[@id="oidzoom_8a3449076f9f6db3016ffb297b0f5c9b"]'),
         ("Processo Compra Finalizado", '//*[@id="field_8a3449076f9f6db3016fc95433971a26"]'),
         ("Data Aprovação Técnica", '//*[@id="field_8a3449076f9f6db3016fc9666f801d12"]'),
-        ("Data Prevista Recebimento", '//*[@id="field_8a34490772473ce70172c30fab5e3842"]')
+        ("Data Prevista Recebimento", '//*[@id="field_8a34490772473ce70172c30fab5e3842"]'),
+        ("Data do Recebimento", '//*[@id="field_8a3449076f9f6db3016fd75554bd334c"]')
     ]
-    
-    #Extrair texto do campo 'ordem de compra'
-    # try:
-    #     ordem_compra = WebDriverWait(driver, 3).until(
-    #         EC.presence_of_element_located((By.XPATH, '//*[@id="link_filename8a3449076f9f6db3016fc987d8462468"]'))
-    #     )
-    #     dados_dos_chamados["Ordem de Compra"] = ordem_compra.text.strip()
-    # except:
-    #     dados_dos_chamados["Ordem de Compra"] = ""
    
    # Extrair texto do campo 'Ordem de Compra'
     try:
@@ -563,8 +519,7 @@ def extrai_dados (numchamado):
     except:
         dados_dos_chamados["Ordem de Compra"] = "" 
 
-    print("Dados do chamado ", numchamado, " extraídos.")
-                
+            
     for nome, xpath in campos:
         element = WebDriverWait(driver, 100).until(
             EC.presence_of_element_located((By.XPATH, xpath))
@@ -621,7 +576,7 @@ def extrai_dados (numchamado):
             
     sleep(2)    
 
-    ### Salvar
+    ### DEBUG: Salvar HTML
     # with open("html_debug.html", "w", encoding="utf-8") as f:
     #     f.write(driver.page_source)
         
@@ -663,16 +618,12 @@ def extrai_dados (numchamado):
     #         driver.switch_to.default_content()
     # #/DEBUG: Salvar cada iframe como HTML para inspeção.
 
-
-
-    # Volta ao default e entra no iframe correto
-    #driver.switch_to.default_content()
-    
+   
     try:
         WebDriverWait(driver, 15).until(
             EC.frame_to_be_available_and_switch_to_it((By.NAME, "iframe_history"))
         )
-        print("🎯 Entrou no iframe_history")
+        #print("🎯 Entrou no iframe_history")
     except TimeoutException:
         print("❌ Não conseguiu acessar o iframe 'iframe_history'.")
         return None
@@ -683,24 +634,40 @@ def extrai_dados (numchamado):
             EC.element_to_be_clickable((By.XPATH, '//*[starts-with(@id, "history")]/div/span/div/div/div/span[contains(text(), "Exibir histórico")]'))
         )
         botao.click()
-        print("✅ Botão 'Exibir histórico completo' clicado.")
+        #print("✅ Botão 'Exibir histórico completo' clicado.")
     except TimeoutException:
         print("❌ Botão 'Exibir histórico completo' não clicável.")
         return None
     
-    # Aguarda conteúdo do histórico aparecer
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "timelineItem")))
-
-
+    # Aguarda conteúdo do histórico aparecer (3x)
+    for tentativa in range(3):
+        try:
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "timelineItem")))
+            break
+        except TimeoutException:
+            print(f"⏳ Tentativa {tentativa+1}/3: 'timelineItem' não encontrado. Recarregando a página...")
+            driver.refresh()
+            sleep(2)
+    else:
+        print(f"❌ Falha ao localizar 'timelineItem' após 3 tentativas. Pulando chamado {numchamado}.")
+        return None
 
 
     # Coleta HTML do iframe e analisa com BeautifulSoup
     html_history = driver.page_source
     soup = BeautifulSoup(html_history, 'html.parser')
     
-    data_conclusao_processo = None
-    atividade_habilitada = None
+    #atividade_habilitada = None
+    data_emissao_oc = None
+    data_atividade_prioritaria = None
+    #atividade_prioritaria = ""
     
+    # Palavras-chave para atividades que devem sobrepor a regra padrão de data de emissão de OC
+    gatilhos_prioritarios = [
+        "encaminhar boleto pagamento dos serviços de courrier",
+        "informar dados de pagamento habilitada"
+    ]
+ 
     # Percorre os blocos do histórico do mais recente para o mais antigo
     itens = list(reversed(soup.select("div.timelineItem")))
     
@@ -712,6 +679,24 @@ def extrai_dados (numchamado):
         texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
         texto_normalizado = texto.replace("  ", " ").strip().lower()
     
+        # Regra 0: atividade prioritária (substitui Confirmar Recebimento) para fins de data de emissão da OC
+        for gatilho in gatilhos_prioritarios:
+            if gatilho in texto_normalizado and "habilitada" in texto_normalizado:
+                header = item.select_one("div.timelineItemContentHeader")
+                if header:
+                    tokens = header.get_text(strip=True).split()
+                    if len(tokens) >= 3:
+                        terceiro_ultimo = tokens[-3]
+                        if terceiro_ultimo[-4:].lower() == "hoje":
+                            data_atividade_prioritaria = datetime.today().strftime("%d/%m/%Y")
+                        elif terceiro_ultimo[-4:].lower() == "ntem":
+                            data_atividade_prioritaria = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
+                        else:
+                            data_atividade_prioritaria = terceiro_ultimo[-10:]
+                        #atividade_prioritaria = gatilho
+                break  # considera apenas a última ocorrência mais recente (reverso)
+    
+    
         # Regra 1: atividade confirmada e habilitada
         if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
             header = item.select_one("div.timelineItemContentHeader")
@@ -720,11 +705,11 @@ def extrai_dados (numchamado):
                 if len(tokens) >= 3:
                     terceiro_ultimo = tokens[-3]
                     if terceiro_ultimo[-4:].lower() == "hoje":
-                        data_conclusao_processo = datetime.today().strftime("%d/%m/%Y")
+                        data_emissao_oc = datetime.today().strftime("%d/%m/%Y")
                     elif terceiro_ultimo[-4:].lower() == "ntem":
-                        data_conclusao_processo = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
+                        data_emissao_oc = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
                     else:
-                        data_conclusao_processo = terceiro_ultimo[-10:]
+                        data_emissao_oc = terceiro_ultimo[-10:]
             break  # essa é a mais recente, pode sair
     
         # Regra 2: atividade cancelada + instância encerrada
@@ -735,54 +720,18 @@ def extrai_dados (numchamado):
             status_texto = "Cancelado"
             break
 
+    # Se houver atividade prioritária, ela sobrepõe a regra padrão
+    if data_atividade_prioritaria:
+        data_emissao_oc = data_atividade_prioritaria
+
+
     # Aqui você pode adicionar mais elif com novas regras de verificação futuras
     # elif "outra condição" in texto_normalizado:
     #     fazer algo
 
     # Ao final do bloco, `data_conclusao_processo` ou `atividade_habilitada` estarão preenchidos
 
-
-    
-    # # Coleta HTML do iframe e analisa com BeautifulSoup
-    # html_history = driver.page_source
-    # soup = BeautifulSoup(html_history, 'html.parser')
-    
-    # data_conclusao_processo = None
-    
-    # # Percorre os blocos de histórico
-    # for item in reversed(soup.select("div.timelineItem")):
-    #     descricao_raw = item.select_one("div.description")
-    #     if not descricao_raw:
-    #         continue
-    
-    #     texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
-    #     texto_normalizado = texto.replace("  ", " ").strip().lower()
-
-    #     if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
-    #         header = item.select_one("div.timelineItemContentHeader")
-    #         if not header:
-    #             continue
-            
-    #         header_text = header.get_text(strip=True)
-    #         tokens = header_text.split()
-
-    #         if len(tokens) >= 3:
-    #             terceiro_ultimo = tokens[-3]
-    #             sufixo = terceiro_ultimo[-4:]
-            
-    #             if sufixo == "Hoje":
-    #                 data_conclusao_processo = datetime.today().strftime("%d/%m/%Y")
-    #             elif sufixo == "ntem":
-    #                 data_conclusao_processo = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
-    #             else:
-    #                 data_conclusao_processo = terceiro_ultimo[-10:]
-    #         else:
-    #             data_conclusao_processo = ""
-#####################################
-
-    
-
-
+    #####################################
 
     # DEBUG
     # Exporta HTML completo do iframe de histórico
@@ -824,11 +773,6 @@ def extrai_dados (numchamado):
     #         print("    ❌ Erro ao acessar iframe\n")
     #     finally:
     #         driver.switch_to.parent_frame()    
-        
-        
-    
-    
-    
     
 
     # ########## DEBUG 2
@@ -840,13 +784,8 @@ def extrai_dados (numchamado):
     # for i, iframe in enumerate(iframes):
     #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
     # ########## /DEBUG2
-
-
-    ########## DEBUG 2
-
-    ########## /DEBUG
-
-                 
+    
+                   
     for janela in driver.window_handles:
         if janela != janela_principal:
             driver.switch_to.window(janela)
@@ -855,8 +794,9 @@ def extrai_dados (numchamado):
     driver.switch_to.window(janela_principal)
     
     dados_dos_chamados["Status"] = status_texto
-    dados_dos_chamados["Data Conclusão Processo"] = data_conclusao_processo  # ← novo campo
+    dados_dos_chamados["Data Emissão OC"] = data_emissao_oc  # ← novo campo
 
+    print("Dados do chamado ", numchamado, " extraídos.")
     
     return dados_dos_chamados
 
@@ -898,17 +838,12 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Valor R$", "Justificativa", "Justificativa GP", "Data Análise Célula",
                         "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
-                        "Ordem de Compra", "Data Prevista Recebimento", "Data Conclusão Processo"]
+                        "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
+                        "Data do Recebimento"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
 linhas_existentes = worksheet.get_all_values()
-
-# mapa_identificador_linha = {
-#     str(int(float(linha[2]))).zfill(6): idx + 1
-#     for idx, linha in enumerate(linhas_existentes[1:])
-#     if len(linha) > 2 and linha[2].replace('.', '', 1).isdigit()
-# }
 
 mapa_identificador_linha = {
     str(linha[3]).zfill(6): idx + 1
@@ -987,22 +922,6 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
             }
             dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
-    # Cálculo do ANS
-    # apoio = dados_dos_chamados.get("Apoio Consultivo")
-    # tipo = dados_dos_chamados.get("Tipo Item")
-    
-    # ans_map = {
-    #     ("Não", "Produto Internacional"): 6,
-    #     ("Não", "Produto Nacional"): 5,
-    #     ("Não", "Serviço Internacional"): 6,
-    #     ("Não", "Serviço Nacional"): 5,
-    #     ("Sim", "Produto Internacional"): 30,
-    #     ("Sim", "Produto Nacional"): 20,
-    #     ("Sim", "Serviço Internacional"): 30,
-    #     ("Sim", "Serviço Nacional"): 20
-    # }
-    
-    # dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
     linha_existente = mapa_identificador_linha.get(identificador)
@@ -1018,8 +937,7 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
         remover_chamado_manuais(worksheet_manuais, identificador)
 
 
-
-#%% Primeiro: processa chamados manuais
+#%% Primeiro: processa chamados manuais (forçar extração)
 
 print("📌 Iniciando extração de chamados manuais...")
 chamados_extraidos_com_sucesso = []
@@ -1117,11 +1035,13 @@ chamados_para_verificar = [
     if linha.get("Atividade Habilitada") not in ["Encerrado", "Cancelado"]
 ]
 
+total_que_saiu = len(chamados_para_verificar) - len(conjunto_chamados_xls)
+
 # 3. Para cada chamado da planilha, verifica se ele saiu do XLS
-for linha in chamados_para_verificar:
+for idx, linha in enumerate(chamados_para_verificar):
     identificador = str(linha["Identificador"]).zfill(6)
     if identificador not in conjunto_chamados_xls:
-        print(f"[{idx+1}/{len(chamados_para_verificar)}] 🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
+        print(f"[{idx+1}/{total_que_saiu}] 🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
         dados_dos_chamados = extrai_dados(identificador)
 
         if dados_dos_chamados:
@@ -1142,7 +1062,6 @@ print("✅ Encerrada a extração dos chamados finalizados recentemente.")
 
 #%% Exportar a aba "Dados_v1_1" para CSV
 
-
 print("💾 Exportando aba 'Dados_v1_1' para CSV...")
 
 dados_worksheet = worksheet.get_all_values()
@@ -1153,6 +1072,8 @@ with open(caminho_csv, mode='w', newline='', encoding='utf-8') as arquivo_csv:
     writer.writerows(dados_worksheet)
 
 print(f"✅ Arquivo CSV exportado com sucesso para {caminho_csv}")
+
+driver.quit()
 
 print("Finalizando...")
 
