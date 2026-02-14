@@ -311,6 +311,32 @@ def tratar_alerta(driver):
             return False
 
 #%%
+# def data_hoje_ontem(data_txt):
+#     data_txt = data_txt.lower()
+
+#     if data_txt.endswith("hoje"):
+#         return datetime.today()
+#     elif data_txt.endswith("ntem"):
+#         return datetime.today() - timedelta(days=1)
+#     else:
+#         return datetime.strptime(data_txt[-10:], "%d/%m/%Y")
+
+def data_hoje_ontem(data_txt):
+    data_txt = data_txt.strip()
+    data_lower = data_txt.lower()
+    if data_lower.endswith("hoje"):
+        return datetime.today()
+    elif data_lower.endswith("ntem"):
+        return datetime.today() - timedelta(days=1)
+    else:
+        # Extrai dd/mm/aaaa de strings como "NOME SOBRENOME 15/09/2025 - 08:37"
+        import re
+        match = re.search(r'\d{2}/\d{2}/\d{4}', data_txt)
+        if match:
+            return datetime.strptime(match.group(), "%d/%m/%Y")
+        return None
+
+#%%
 
 def extrai_dados (numchamado):
     sleep(1)
@@ -553,7 +579,7 @@ def extrai_dados (numchamado):
 
 
     ### HISTÓRICO
-    # Volta para Rubbonframe para acessar histórico (ver se precisa dessa parte - Sim, precisa!)
+    # Volta para Ribbonframe para acessar histórico (ver se precisa dessa parte - Sim, precisa!)
     driver.switch_to.default_content()
     
     try:
@@ -661,6 +687,10 @@ def extrai_dados (numchamado):
     data_emissao_oc = None
     data_atividade_prioritaria = None
     #atividade_prioritaria = ""
+    periodos_suspensao = []
+    data_inicio_suspensao = None
+    dias_suspensos = 0
+    data_oc_encontrada = False
     
     # Palavras-chave para atividades que devem sobrepor a regra padrão de data de emissão de OC
     gatilhos_prioritarios = [
@@ -670,60 +700,157 @@ def extrai_dados (numchamado):
  
     # Percorre os blocos do histórico do mais recente para o mais antigo
     itens = list(reversed(soup.select("div.timelineItem")))
-    
+
     for idx, item in enumerate(itens):
-        descricao_raw = item.select_one("div.description")
+        # descricao_raw = item.select_one("div.timelineItemContent")
+        # if not descricao_raw:
+        #     continue
+    
+        # texto = descricao_raw.get_text(" ", strip=True)
+        # texto_normalizado = texto.replace("  ", " ").strip().lower()
+    
+        # data_div = item.find_previous("div", class_="cd-timeline-date")        
+        # data_txt = data_div.get_text(strip=True) if data_div else None
+
+        descricao_raw = item.select_one("div.timelineItemContent")
+    
         if not descricao_raw:
             continue
     
-        texto = ' '.join(span.get_text(strip=True) for span in descricao_raw.find_all("span"))
+        texto = descricao_raw.get_text(" ", strip=True)
         texto_normalizado = texto.replace("  ", " ").strip().lower()
     
-        # Regra 0: atividade prioritária (substitui Confirmar Recebimento) para fins de data de emissão da OC
+        header = item.select_one("div.timelineItemContentHeader")
+        data_txt = header.get_text(strip=True) if header else None
+        
+    
+        # Regra 0: atividade prioritária (substitui Confirmar Recebimento para
+        # fins de data de emissão da OC)
         for gatilho in gatilhos_prioritarios:
             if gatilho in texto_normalizado and "habilitada" in texto_normalizado:
-                header = item.select_one("div.timelineItemContentHeader")
-                if header:
-                    tokens = header.get_text(strip=True).split()
-                    if len(tokens) >= 3:
-                        terceiro_ultimo = tokens[-3]
-                        if terceiro_ultimo[-4:].lower() == "hoje":
-                            data_atividade_prioritaria = datetime.today().strftime("%d/%m/%Y")
-                        elif terceiro_ultimo[-4:].lower() == "ntem":
-                            data_atividade_prioritaria = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
-                        else:
-                            data_atividade_prioritaria = terceiro_ultimo[-10:]
-                        #atividade_prioritaria = gatilho
-                break  # considera apenas a última ocorrência mais recente (reverso)
-    
-    
-        # Regra 1: atividade confirmada e habilitada
-        if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
-            header = item.select_one("div.timelineItemContentHeader")
-            if header:
-                tokens = header.get_text(strip=True).split()
-                if len(tokens) >= 3:
-                    terceiro_ultimo = tokens[-3]
-                    if terceiro_ultimo[-4:].lower() == "hoje":
-                        data_emissao_oc = datetime.today().strftime("%d/%m/%Y")
-                    elif terceiro_ultimo[-4:].lower() == "ntem":
-                        data_emissao_oc = (datetime.today() - timedelta(days=1)).strftime("%d/%m/%Y")
-                    else:
-                        data_emissao_oc = terceiro_ultimo[-10:]
-            break  # essa é a mais recente, pode sair
-    
-        # Regra 2: atividade cancelada + instância encerrada
-        elif (
-            "executou a atividade solicitar aquisição com a ação cancelar" in texto_normalizado
-            or "atividade solicitar aquisição executada automaticamente com a ação finalizador" in texto_normalizado
-        ):
-            status_texto = "Cancelado"
-            break
 
-    # Se houver atividade prioritária, ela sobrepõe a regra padrão
+                if data_txt:
+                    dt = data_hoje_ontem(data_txt)
+                    if dt:
+                        data_atividade_prioritaria = dt.strftime("%d/%m/%Y")
+                break
+            
+                # if data_txt:
+                #     data_atividade_prioritaria = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
+                # break
+    
+        # Regra 1: confirmar recebimento habilitada
+        if not data_oc_encontrada:
+            if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
+                if data_txt:
+                    dt = data_hoje_ontem(data_txt)
+                    if dt:
+                        data_emissao_oc = dt.strftime("%d/%m/%Y")
+                        data_oc_encontrada = True
+
+                # if data_txt:
+                #     data_emissao_oc = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
+                #     data_oc_encontrada = True  # Para de buscar a data da OC, mas continua o loop
+    
+        # Regra 2: cancelamento
+        if not data_oc_encontrada:
+            if (
+                "executou a atividade solicitar aquisição com a ação cancelar" in texto_normalizado
+                or "atividade solicitar aquisição executada automaticamente com a ação finalizador" in texto_normalizado
+            ):
+                status_texto = "Cancelado"
+                data_oc_encontrada = True  # Para de buscar a data da OC, mas continua o loop
+    
+        # Suspensão — roda sempre, independente das regras acima
+        if "suspendeu a instância" in texto_normalizado:
+            if data_txt:
+                dt = data_hoje_ontem(data_txt)
+                if dt:
+                    data_inicio_suspensao = dt            
+            
+            # if data_txt:
+            #     data_inicio_suspensao = data_hoje_ontem(data_txt)
+    
+        elif "reativou a instância" in texto_normalizado and data_inicio_suspensao:
+            if data_txt:
+                dt = data_hoje_ontem(data_txt)
+                if dt:
+                    dias = (data_inicio_suspensao - dt).days
+                    if dias > 0:
+                        periodos_suspensao.append(dias)
+                    data_inicio_suspensao = None
+                
+                
+                # data_fim = data_hoje_ontem(data_txt)
+                # dias = (data_fim - data_inicio_suspensao).days
+                # if dias > 0:
+                #     periodos_suspensao.append(dias)
+                # data_inicio_suspensao = None
+    
+    dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0
+        
+   
+    # #Código anterior
+    # for idx, item in enumerate(itens):
+    #     descricao_raw = item.select_one("div.cd-timeline-content")
+    #     if not descricao_raw:
+    #         continue
+    
+    #     texto = descricao_raw.get_text(" ", strip=True)
+    #     texto_normalizado = texto.replace("  ", " ").strip().lower()
+    
+    #     # Captura da data associada ao bloco
+    #     data_div = item.find_previous("div", class_="cd-timeline-date")
+    #     data_txt = data_div.get_text(strip=True) if data_div else None
+    
+    #     # Regra 0: atividade prioritária
+    #     for gatilho in gatilhos_prioritarios:
+    #         if gatilho in texto_normalizado and "habilitada" in texto_normalizado:
+    #             if data_txt:
+    #                 data_atividade_prioritaria = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
+    #             break
+    
+    #     # Regra 1: confirmar recebimento habilitada
+    #     if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
+    #         if data_txt:
+    #             data_emissao_oc = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
+    #         break
+    
+    #     # Regra 2: cancelamento
+    #     elif (
+    #         "executou a atividade solicitar aquisição com a ação cancelar" in texto_normalizado
+    #         or "atividade solicitar aquisição executada automaticamente com a ação finalizador" in texto_normalizado
+    #     ):
+    #         status_texto = "Cancelado"
+    #         break
+    
+    #     # Prioridade sobre regra padrão
+    #     # if data_atividade_prioritaria:
+    #     #     data_emissao_oc = data_atividade_prioritaria
+            
+    #     # Prioridade sobre regra padrão apenas se não houver outra data definida
+    #     # if data_atividade_prioritaria and not data_emissao_oc:
+    #     #     data_emissao_oc = data_atividade_prioritaria
+            
+    #     #dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0       
+    
+    #     # Controle de suspensão
+    #     if "suspendeu a instância" in texto_normalizado:
+    #         if data_txt:
+    #             data_inicio_suspensao = data_hoje_ontem(data_txt)
+    
+    #     elif "reativou a instância" in texto_normalizado and data_inicio_suspensao:
+    #         if data_txt:
+    #             data_fim = data_hoje_ontem(data_txt)
+    #             dias = (data_fim - data_inicio_suspensao).days
+    #             periodos_suspensao.append(dias)
+    #             data_inicio_suspensao = None
+    
+    #     dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0      
+
+    # Prioridade sobre regra padrão apenas se não houver outra data definida
     if data_atividade_prioritaria:
         data_emissao_oc = data_atividade_prioritaria
-
 
     # Aqui você pode adicionar mais elif com novas regras de verificação futuras
     # elif "outra condição" in texto_normalizado:
@@ -794,7 +921,8 @@ def extrai_dados (numchamado):
     driver.switch_to.window(janela_principal)
     
     dados_dos_chamados["Status"] = status_texto
-    dados_dos_chamados["Data Emissão OC"] = data_emissao_oc  # ← novo campo
+    dados_dos_chamados["Data Emissão OC"] = data_emissao_oc
+    dados_dos_chamados["Dias Suspenso"] = dias_suspensos
 
     print("Dados do chamado ", numchamado, " extraídos.")
     
@@ -839,7 +967,7 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
                         "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
-                        "Data do Recebimento"]
+                        "Dias Suspenso", "Data do Recebimento"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
