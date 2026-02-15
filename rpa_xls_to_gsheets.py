@@ -598,51 +598,9 @@ def extrai_dados (numchamado):
             botao.click()
             break
         except:
-            sleep(2) 
+            sleep(1) 
             
-    sleep(2)    
-
-    ### DEBUG: Salvar HTML
-    # with open("html_debug.html", "w", encoding="utf-8") as f:
-    #     f.write(driver.page_source)
-        
-
-    
-    
-    # #DEBUG: Salvar cada iframe como HTML para inspeção.
-    # driver.switch_to.default_content()
-    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    
-    # for i, iframe in enumerate(iframes):
-    #     nome = iframe.get_attribute("name") or iframe.get_attribute("id") or f"iframe_{i}"
-    #     nome = nome.replace("/", "_").replace("\\", "_")
-    
-    #     try:
-    #         driver.switch_to.frame(iframe)
-    #         html = driver.page_source
-    #         with open(f"{nome}.html", "w", encoding="utf-8") as f:
-    #             f.write(html)
-    #         print(f"✅ {nome}.html salvo com sucesso.")
-    
-    #         # Tenta capturar iframes internos
-    #         iframes_internos = driver.find_elements(By.TAG_NAME, "iframe")
-    #         for j, iframe_interno in enumerate(iframes_internos):
-    #             nome_interno = iframe_interno.get_attribute("name") or iframe_interno.get_attribute("id") or f"{nome}_interno_{j}"
-    #             nome_interno = nome_interno.replace("/", "_").replace("\\", "_")
-    #             try:
-    #                 driver.switch_to.frame(iframe_interno)
-    #                 html_interno = driver.page_source
-    #                 with open(f"{nome_interno}.html", "w", encoding="utf-8") as f:
-    #                     f.write(html_interno)
-    #                 print(f"✅ {nome_interno}.html salvo com sucesso.")
-    #                 driver.switch_to.parent_frame()
-    #             except Exception as e:
-    #                 print(f"❌ Erro ao salvar iframe interno {nome_interno}: {e}")
-    #         driver.switch_to.parent_frame()
-    #     except Exception as e:
-    #         print(f"❌ Erro ao salvar iframe {nome}: {e}")
-    #         driver.switch_to.default_content()
-    # #/DEBUG: Salvar cada iframe como HTML para inspeção.
+    #sleep(1)    
 
    
     try:
@@ -662,8 +620,22 @@ def extrai_dados (numchamado):
         botao.click()
         #print("✅ Botão 'Exibir histórico completo' clicado.")
     except TimeoutException:
-        print("❌ Botão 'Exibir histórico completo' não clicável.")
-        return None
+        print("⚠️ Botão 'Exibir histórico completo' não clicável. Dados do histórico serão ignorados.")
+        dados_dos_chamados["Data Emissão OC"] = ""
+        dados_dos_chamados["Dias Suspenso"] = ""
+        dados_dos_chamados["Status"] = status_texto
+        worksheet_manuais.append_row([int(numchamado)])
+        driver.close()
+        driver.switch_to.window(janela_principal)
+        return dados_dos_chamados
+    
+    # O código abaixo cancelava a extração quando não era possível achar o histórico completo.
+    # No entanto, alguns modelos de histórico são diferentes, e até que se consiga extrair ambos,
+    # optou-se por ignorar apenas os dados de emissão de OC e tempo suspenso para esses chamados.
+    
+    # except TimeoutException:
+    #     print("❌ Botão 'Exibir histórico completo' não clicável. Pulando chamado...")
+    #     return None
     
     # Aguarda conteúdo do histórico aparecer (3x)
     for tentativa in range(3):
@@ -695,23 +667,24 @@ def extrai_dados (numchamado):
     # Palavras-chave para atividades que devem sobrepor a regra padrão de data de emissão de OC
     gatilhos_prioritarios = [
         "encaminhar boleto pagamento dos serviços de courrier",
-        "informar dados de pagamento habilitada"
+        "informar dados de pagamento",
+        "abrir e aprovar rn para o serviço de importação"
     ]
  
     # Percorre os blocos do histórico do mais recente para o mais antigo
-    itens = list(reversed(soup.select("div.timelineItem")))
+    itens = soup.select("div.timelineItem")
+    
+    #itens = list(reversed(soup.select("div.timelineItem")))
+    
 
     for idx, item in enumerate(itens):
-        # descricao_raw = item.select_one("div.timelineItemContent")
-        # if not descricao_raw:
-        #     continue
-    
-        # texto = descricao_raw.get_text(" ", strip=True)
-        # texto_normalizado = texto.replace("  ", " ").strip().lower()
-    
-        # data_div = item.find_previous("div", class_="cd-timeline-date")        
-        # data_txt = data_div.get_text(strip=True) if data_div else None
-
+        
+        #Debug temporário
+        #header = item.select_one("div.timelineItemContentHeader")
+        #data_txt = header.get_text(strip=True) if header else None
+        #print(f"[{idx}] {data_txt}")
+        #/Debug temporário
+        
         descricao_raw = item.select_one("div.timelineItemContent")
     
         if not descricao_raw:
@@ -722,8 +695,7 @@ def extrai_dados (numchamado):
     
         header = item.select_one("div.timelineItemContentHeader")
         data_txt = header.get_text(strip=True) if header else None
-        
-    
+            
         # Regra 0: atividade prioritária (substitui Confirmar Recebimento para
         # fins de data de emissão da OC)
         for gatilho in gatilhos_prioritarios:
@@ -734,10 +706,6 @@ def extrai_dados (numchamado):
                     if dt:
                         data_atividade_prioritaria = dt.strftime("%d/%m/%Y")
                 break
-            
-                # if data_txt:
-                #     data_atividade_prioritaria = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
-                # break
     
         # Regra 1: confirmar recebimento habilitada
         if not data_oc_encontrada:
@@ -747,10 +715,6 @@ def extrai_dados (numchamado):
                     if dt:
                         data_emissao_oc = dt.strftime("%d/%m/%Y")
                         data_oc_encontrada = True
-
-                # if data_txt:
-                #     data_emissao_oc = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
-                #     data_oc_encontrada = True  # Para de buscar a data da OC, mas continua o loop
     
         # Regra 2: cancelamento
         if not data_oc_encontrada:
@@ -767,9 +731,6 @@ def extrai_dados (numchamado):
                 dt = data_hoje_ontem(data_txt)
                 if dt:
                     data_inicio_suspensao = dt            
-            
-            # if data_txt:
-            #     data_inicio_suspensao = data_hoje_ontem(data_txt)
     
         elif "reativou a instância" in texto_normalizado and data_inicio_suspensao:
             if data_txt:
@@ -779,74 +740,9 @@ def extrai_dados (numchamado):
                     if dias > 0:
                         periodos_suspensao.append(dias)
                     data_inicio_suspensao = None
-                
-                
-                # data_fim = data_hoje_ontem(data_txt)
-                # dias = (data_fim - data_inicio_suspensao).days
-                # if dias > 0:
-                #     periodos_suspensao.append(dias)
-                # data_inicio_suspensao = None
     
     dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0
-        
-   
-    # #Código anterior
-    # for idx, item in enumerate(itens):
-    #     descricao_raw = item.select_one("div.cd-timeline-content")
-    #     if not descricao_raw:
-    #         continue
-    
-    #     texto = descricao_raw.get_text(" ", strip=True)
-    #     texto_normalizado = texto.replace("  ", " ").strip().lower()
-    
-    #     # Captura da data associada ao bloco
-    #     data_div = item.find_previous("div", class_="cd-timeline-date")
-    #     data_txt = data_div.get_text(strip=True) if data_div else None
-    
-    #     # Regra 0: atividade prioritária
-    #     for gatilho in gatilhos_prioritarios:
-    #         if gatilho in texto_normalizado and "habilitada" in texto_normalizado:
-    #             if data_txt:
-    #                 data_atividade_prioritaria = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
-    #             break
-    
-    #     # Regra 1: confirmar recebimento habilitada
-    #     if "confirmar recebimento" in texto_normalizado and "habilitada" in texto_normalizado:
-    #         if data_txt:
-    #             data_emissao_oc = data_hoje_ontem(data_txt).strftime("%d/%m/%Y")
-    #         break
-    
-    #     # Regra 2: cancelamento
-    #     elif (
-    #         "executou a atividade solicitar aquisição com a ação cancelar" in texto_normalizado
-    #         or "atividade solicitar aquisição executada automaticamente com a ação finalizador" in texto_normalizado
-    #     ):
-    #         status_texto = "Cancelado"
-    #         break
-    
-    #     # Prioridade sobre regra padrão
-    #     # if data_atividade_prioritaria:
-    #     #     data_emissao_oc = data_atividade_prioritaria
-            
-    #     # Prioridade sobre regra padrão apenas se não houver outra data definida
-    #     # if data_atividade_prioritaria and not data_emissao_oc:
-    #     #     data_emissao_oc = data_atividade_prioritaria
-            
-    #     #dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0       
-    
-    #     # Controle de suspensão
-    #     if "suspendeu a instância" in texto_normalizado:
-    #         if data_txt:
-    #             data_inicio_suspensao = data_hoje_ontem(data_txt)
-    
-    #     elif "reativou a instância" in texto_normalizado and data_inicio_suspensao:
-    #         if data_txt:
-    #             data_fim = data_hoje_ontem(data_txt)
-    #             dias = (data_fim - data_inicio_suspensao).days
-    #             periodos_suspensao.append(dias)
-    #             data_inicio_suspensao = None
-    
-    #     dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0      
+
 
     # Prioridade sobre regra padrão apenas se não houver outra data definida
     if data_atividade_prioritaria:
@@ -860,59 +756,6 @@ def extrai_dados (numchamado):
 
     #####################################
 
-    # DEBUG
-    # Exporta HTML completo do iframe de histórico
-    # try:
-    #     html_history = driver.page_source
-    #     with open("iframe_history_renderizado.html", "w", encoding="utf-8") as f:
-    #         f.write(html_history)
-    #     print("📄 HTML do histórico salvo como 'iframe_history_renderizado.html'.")
-    # except Exception as e:
-    #     print(f"❌ Erro ao salvar HTML do histórico: {e}")
-
-
-    # ########## DEBUG 1
-    # #driver.switch_to.default_content()
-    
-    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    # print("DEBUG 1")
-    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
-    # for i, iframe in enumerate(iframes):
-    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
-    # ######### /DEBUG1
-    
-    
-    
-    # print("\n🔎 PREVIEW DOS IFRAMES (1000 primeiros caracteres)\n")
-    
-    # for i, iframe in enumerate(iframes):
-    #     nome = iframe.get_attribute("name")
-    #     iframe_id = iframe.get_attribute("id")
-    
-    #     try:
-    #         driver.switch_to.frame(iframe)
-    #         html = driver.page_source
-    #         preview = html.replace("\n", " ").replace("\r", " ")[:1000]
-    #         print(f"[{i}] name={nome} | id={iframe_id}")
-    #         print(f"    {preview}\n")
-    #     except Exception as e:
-    #         print(f"[{i}] name={nome} | id={iframe_id}")
-    #         print("    ❌ Erro ao acessar iframe\n")
-    #     finally:
-    #         driver.switch_to.parent_frame()    
-    
-
-    # ########## DEBUG 2
-    # #driver.switch_to.default_content()
-    
-    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    # print("DEBUG 2")
-    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
-    # for i, iframe in enumerate(iframes):
-    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
-    # ########## /DEBUG2
-    
-                   
     for janela in driver.window_handles:
         if janela != janela_principal:
             driver.switch_to.window(janela)
@@ -928,6 +771,19 @@ def extrai_dados (numchamado):
     
     return dados_dos_chamados
 
+#%%
+
+def extrai_dados_com_retry(numchamado, tentativas=2, espera=10):
+    for tentativa in range(1, tentativas + 1):
+        try:
+            return extrai_dados(numchamado)
+        except TimeoutException:
+            if tentativa < tentativas:
+                print(f"⏳ Timeout no chamado {numchamado}. Tentativa {tentativa}/{tentativas}. Aguardando {espera}s...")
+                sleep(espera)
+            else:
+                print(f"❌ Chamado {numchamado} falhou após {tentativas} tentativas. Pulando.")
+                return None
 
 #%% Google Sheets
 
@@ -1091,7 +947,7 @@ for idx, numero in enumerate(lista_manuais):
 
         
     print(f"[MANUAL {idx+1}/{len(lista_manuais)}] Acessando chamado {numero_formatado}")
-    dados_dos_chamados = extrai_dados(numero_formatado)
+    dados_dos_chamados = extrai_dados_com_retry(numero_formatado)
     
     # ⛔ Se a extração falhou, pula e mantém o chamado na lista
     if dados_dos_chamados is None:
@@ -1132,11 +988,11 @@ for idx, numero in enumerate(num_chamados):
         continue
     
     if (identificador_zfill, atividadehabilitada[idx]) in pares_ja_processados:
-        print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} sem alteração de status. Pulando.")
+        #print(f"[{idx+1}/{len(num_chamados)}] Chamado {numero} sem alteração de status. Pulando.")
         continue
 
     print(f"[{idx+1}/{len(num_chamados)}] Acessando chamado {identificador_zfill}")
-    dados_dos_chamados = extrai_dados(numero)
+    dados_dos_chamados = extrai_dados_com_retry(numero)
 
     if dados_dos_chamados:
         registrar_chamado(
@@ -1170,7 +1026,7 @@ for idx, linha in enumerate(chamados_para_verificar):
     identificador = str(linha["Identificador"]).zfill(6)
     if identificador not in conjunto_chamados_xls:
         print(f"[{idx+1}/{total_que_saiu}] 🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
-        dados_dos_chamados = extrai_dados(identificador)
+        dados_dos_chamados = extrai_dados_com_retry(identificador)
 
         if dados_dos_chamados:
             status_texto = dados_dos_chamados.get("Status", "")
@@ -1207,4 +1063,97 @@ print("Finalizando...")
 
 sleep(3)
 
-#%%        
+#%% DEBUGS úteis para identificar os frames do SE Suite
+
+
+    ### DEBUG: Salvar HTML
+    # with open("html_debug.html", "w", encoding="utf-8") as f:
+    #     f.write(driver.page_source)
+
+    
+    # #DEBUG: Salvar cada iframe como HTML para inspeção.
+    # driver.switch_to.default_content()
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    
+    # for i, iframe in enumerate(iframes):
+    #     nome = iframe.get_attribute("name") or iframe.get_attribute("id") or f"iframe_{i}"
+    #     nome = nome.replace("/", "_").replace("\\", "_")
+    
+    #     try:
+    #         driver.switch_to.frame(iframe)
+    #         html = driver.page_source
+    #         with open(f"{nome}.html", "w", encoding="utf-8") as f:
+    #             f.write(html)
+    #         print(f"✅ {nome}.html salvo com sucesso.")
+    
+    #         # Tenta capturar iframes internos
+    #         iframes_internos = driver.find_elements(By.TAG_NAME, "iframe")
+    #         for j, iframe_interno in enumerate(iframes_internos):
+    #             nome_interno = iframe_interno.get_attribute("name") or iframe_interno.get_attribute("id") or f"{nome}_interno_{j}"
+    #             nome_interno = nome_interno.replace("/", "_").replace("\\", "_")
+    #             try:
+    #                 driver.switch_to.frame(iframe_interno)
+    #                 html_interno = driver.page_source
+    #                 with open(f"{nome_interno}.html", "w", encoding="utf-8") as f:
+    #                     f.write(html_interno)
+    #                 print(f"✅ {nome_interno}.html salvo com sucesso.")
+    #                 driver.switch_to.parent_frame()
+    #             except Exception as e:
+    #                 print(f"❌ Erro ao salvar iframe interno {nome_interno}: {e}")
+    #         driver.switch_to.parent_frame()
+    #     except Exception as e:
+    #         print(f"❌ Erro ao salvar iframe {nome}: {e}")
+    #         driver.switch_to.default_content()
+    # #/DEBUG: Salvar cada iframe como HTML para inspeção.
+    
+    # DEBUG
+    # Exporta HTML completo do iframe de histórico
+    # try:
+    #     html_history = driver.page_source
+    #     with open("iframe_history_renderizado.html", "w", encoding="utf-8") as f:
+    #         f.write(html_history)
+    #     print("📄 HTML do histórico salvo como 'iframe_history_renderizado.html'.")
+    # except Exception as e:
+    #     print(f"❌ Erro ao salvar HTML do histórico: {e}")
+
+
+    # ########## DEBUG 1
+    # #driver.switch_to.default_content()
+    
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    # print("DEBUG 1")
+    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
+    # for i, iframe in enumerate(iframes):
+    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
+    # ######### /DEBUG1
+    
+    
+    
+    # print("\n🔎 PREVIEW DOS IFRAMES (1000 primeiros caracteres)\n")
+    
+    # for i, iframe in enumerate(iframes):
+    #     nome = iframe.get_attribute("name")
+    #     iframe_id = iframe.get_attribute("id")
+    
+    #     try:
+    #         driver.switch_to.frame(iframe)
+    #         html = driver.page_source
+    #         preview = html.replace("\n", " ").replace("\r", " ")[:1000]
+    #         print(f"[{i}] name={nome} | id={iframe_id}")
+    #         print(f"    {preview}\n")
+    #     except Exception as e:
+    #         print(f"[{i}] name={nome} | id={iframe_id}")
+    #         print("    ❌ Erro ao acessar iframe\n")
+    #     finally:
+    #         driver.switch_to.parent_frame()    
+    
+
+    # ########## DEBUG 2
+    # #driver.switch_to.default_content()
+    
+    # iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    # print("DEBUG 2")
+    # print(f"🔎 {len(iframes)} iframe(s) no debug 1:")
+    # for i, iframe in enumerate(iframes):
+    #     print(f"[{i}] name={iframe.get_attribute('name')} | id={iframe.get_attribute('id')}")
+    # ########## /DEBUG2
