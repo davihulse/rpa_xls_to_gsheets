@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 #%%
 
 options = Options()
-options.add_argument("--headless")
+#options.add_argument("--headless")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-gpu")
 options.add_argument("--disable-notifications")
@@ -109,12 +109,12 @@ janela_principal = driver.window_handles[0]
 
 def baixar_xls():
     
-    WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+    #WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
     sleep(1)
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=tracking,104,2')
     
-    WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+    #WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
     sleep(1)
     
     WebDriverWait(driver, 100).until(
@@ -294,12 +294,14 @@ atividadehabilitada = df["AtividadeHabilitadaFiltrada"].tolist()
 
 def tratar_alerta(driver):
     try:
+        WebDriverWait(driver, 2).until(EC.alert_is_present())
         alert = driver.switch_to.alert
         print("⚠️ Alerta detectado:", alert.text)
         alert.accept()
         print("✅ Alerta aceito.")
+        sleep(1)
         return True
-    except NoAlertPresentException:
+    except (NoAlertPresentException, TimeoutException):
         return False
     except UnexpectedAlertPresentException:
         # Se o alerta aparece no meio de uma ação
@@ -375,16 +377,13 @@ def extrai_dados (numchamado):
     print("Aguardando SE Suite...")
         
     try:
-        primeiro_item = WebDriverWait(driver, 200).until(
+        primeiro_item = WebDriverWait(driver, 100).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
         )
         print("Chamado localizado. Extraindo dados...")
     except TimeoutException:
         print("❌ Nenhum item encontrado para o chamado. Pulando.")
         return None
-    
-    #sleep(1)   
-    #tratar_alerta(driver)
     
     for tentativa in range(5):
         handles_antes = set(driver.window_handles)
@@ -402,6 +401,15 @@ def extrai_dados (numchamado):
         return None
     
     dados_dos_chamados = {}
+    
+    ### Tratar alerta está funcionando quando existe alerta, mas quando não tem
+    ### alerta, está causando problemas. Robô não está clicando no "Solicitação
+    ### de Aquisição". Investigar melhor.
+    
+    ### Update 22/02/2026 - após atualização da função, parece estar funcionando bem.
+    
+    sleep(1)   
+    tratar_alerta(driver)
     
     try:
         titulo_element = WebDriverWait(driver, 10).until(
@@ -666,9 +674,10 @@ def extrai_dados (numchamado):
     
     # Palavras-chave para atividades que devem sobrepor a regra padrão de data de emissão de OC
     gatilhos_prioritarios = [
-        "encaminhar boleto pagamento dos serviços de courrier",
-        "informar dados de pagamento",
-        "abrir e aprovar rn para o serviço de importação"
+        "encaminhar boleto pagamento dos serviços de courrier habilitada",
+        "informar dados de pagamento habilitada",
+        "abrir e aprovar rn para o serviço de importação habilitada",
+        "executou a atividade formalizar contrato com a ação finalizar"
     ]
  
     # Percorre os blocos do histórico do mais recente para o mais antigo
@@ -699,7 +708,7 @@ def extrai_dados (numchamado):
         # Regra 0: atividade prioritária (substitui Confirmar Recebimento para
         # fins de data de emissão da OC)
         for gatilho in gatilhos_prioritarios:
-            if gatilho in texto_normalizado and "habilitada" in texto_normalizado:
+            if gatilho in texto_normalizado:
 
                 if data_txt:
                     dt = data_hoje_ontem(data_txt)
@@ -773,11 +782,22 @@ def extrai_dados (numchamado):
 
 #%%
 
-def extrai_dados_com_retry(numchamado, tentativas=2, espera=10):
+def extrai_dados_com_retry(numchamado, tentativas=2, espera=20):
+    janela_principal = driver.window_handles[0]
     for tentativa in range(1, tentativas + 1):
         try:
             return extrai_dados(numchamado)
         except TimeoutException:
+            # Fecha todas as janelas extras antes de tentar de novo
+            try:
+                for janela in driver.window_handles:
+                    if janela != janela_principal:
+                        driver.switch_to.window(janela)
+                        driver.close()
+                driver.switch_to.window(janela_principal)
+            except:
+                pass
+                        
             if tentativa < tentativas:
                 print(f"⏳ Timeout no chamado {numchamado}. Tentativa {tentativa}/{tentativas}. Aguardando {espera}s...")
                 sleep(espera)
