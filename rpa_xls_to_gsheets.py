@@ -845,7 +845,7 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
                         "Dias Suspenso", "Data do Recebimento"]
 
-valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
+#valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
 linhas_existentes = worksheet.get_all_values()
 
@@ -857,9 +857,9 @@ mapa_identificador_linha = {
 
 hoje = datetime.now().strftime("%d/%m/%Y")
 
-pares_ja_processados = {
-    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
-}
+#pares_ja_processados = {
+#    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
+#}
 
 #%% Função Registrar Chamados na Planilha
 
@@ -994,6 +994,13 @@ for idx, numero in enumerate(lista_manuais):
         )
 
 print("✅ Encerrada a extração de chamados manuais. Continuando para os demais chamados...")
+
+valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
+
+pares_ja_processados = {
+    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
+}
+
 
 #%% Segue com os chamados automáticos
 
