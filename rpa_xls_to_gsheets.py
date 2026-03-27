@@ -177,7 +177,6 @@ def desbloquear_arquivo_excel(caminho_arquivo):
 def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
     print("Convertendo arquivo para XLSX...")
     excel = win32.DispatchEx('Excel.Application')  # cria nova instância
-    #excel = win32.gencache.EnsureDispatch('Excel.Application')
     excel.Visible = False  # Excel rodando "invisível"
     excel.DisplayAlerts = False  # Evita pop-ups e confirmações
 
@@ -313,15 +312,6 @@ def tratar_alerta(driver):
             return False
 
 #%%
-# def data_hoje_ontem(data_txt):
-#     data_txt = data_txt.lower()
-
-#     if data_txt.endswith("hoje"):
-#         return datetime.today()
-#     elif data_txt.endswith("ntem"):
-#         return datetime.today() - timedelta(days=1)
-#     else:
-#         return datetime.strptime(data_txt[-10:], "%d/%m/%Y")
 
 def data_hoje_ontem(data_txt):
     data_txt = data_txt.strip()
@@ -369,9 +359,9 @@ def extrai_dados (numchamado):
         return None
     
     inserir_compra.clear()
-    sleep(1)
+    sleep(2)
     inserir_compra.send_keys(str(numchamado))
-    sleep(1)
+    sleep(2)
     inserir_compra.send_keys(Keys.ENTER)
     
     print("Aguardando SE Suite...")
@@ -757,7 +747,7 @@ def extrai_dados (numchamado):
     if data_atividade_prioritaria:
         data_emissao_oc = data_atividade_prioritaria
 
-    # Aqui você pode adicionar mais elif com novas regras de verificação futuras
+    # Aqui poderemos adicionar mais elif com novas regras de verificação futuras
     # elif "outra condição" in texto_normalizado:
     #     fazer algo
 
@@ -845,7 +835,7 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
                         "Dias Suspenso", "Data do Recebimento"]
 
-#valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
+valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
 linhas_existentes = worksheet.get_all_values()
 
@@ -857,9 +847,12 @@ mapa_identificador_linha = {
 
 hoje = datetime.now().strftime("%d/%m/%Y")
 
-#pares_ja_processados = {
-#    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
-#}
+# Pares ja processados é montado novamente depois da extração dos manuais.
+# Avaliar se pode ser retirado daqui futuramente. Mantido por questões de segurança
+# para evitar extração em duplicidade.
+pares_ja_processados = {
+    (str(linha["Identificador"]).zfill(6), linha["Atividade Habilitada"]) for linha in valores_existentes
+}
 
 #%% Função Registrar Chamados na Planilha
 
@@ -926,6 +919,11 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
             }
             dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
+    status_final = dados_dos_chamados.get("Status", "")
+    if status_final == "Cancelado" and dados_dos_chamados.get("ANS") == "":
+        dados_dos_chamados["ANS"] = "Cancelado"
+    elif dados_dos_chamados.get("ANS") == "":
+        dados_dos_chamados["ANS"] = "Em análise"
 
     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
     linha_existente = mapa_identificador_linha.get(identificador)
