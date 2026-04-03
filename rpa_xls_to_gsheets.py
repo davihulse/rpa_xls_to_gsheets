@@ -276,6 +276,10 @@ df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da sol
 df = df[~df["Atividade habilitada"].str.startswith("Solicitar aquisição", na=False)]
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
 
+#Desconsidera identificadores que começam com E-PROC
+df = df[~df["Identificador"].astype(str).str.startswith("E-PROC", na=False)]
+
+
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
 print()
