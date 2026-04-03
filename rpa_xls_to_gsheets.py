@@ -15,11 +15,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoAlertPresentException, UnexpectedAlertPresentException
 from datetime import datetime, timedelta
+import re
 import os
 import ctypes
 import win32com.client as win32
 import gspread
 import csv
+import requests
+import pdfplumber
+import io
 from bs4 import BeautifulSoup
 
 #%%
@@ -39,8 +43,6 @@ options.add_experimental_option("prefs", {
     "directory_upgrade": True,
     "safebrowsing.enabled": True
 })
-
-#options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
 service = Service(log_path="NUL")
 
@@ -331,6 +333,59 @@ def data_hoje_ontem(data_txt):
         if match:
             return datetime.strptime(match.group(), "%d/%m/%Y")
         return None
+    
+#%%    
+#import re
+
+def extrair_dados_oc(texto_pdf):
+    numero_oc = ""
+    data_emissao = ""
+    nome_fornecedor_pdf = ""
+    cnpj_fornecedor_pdf = ""
+    prazo_entrega_pdf = ""
+    
+    primeiras_linhas = "\n".join(texto_pdf.splitlines()[:5])
+    #print(f"🔍 Primeiras linhas:\n{primeiras_linhas}")
+
+    if "Número AF:" in primeiras_linhas:
+        # Modelo 1
+        texto_limpo = re.sub(r'\(cid:\d+\)', ' ', texto_pdf)
+        match_num = re.search(r'Número AF:\s*(\d+)', texto_limpo)
+        match_data = re.search(r'Data:\s*(\d{2}/\d{2}/\d{4})', texto_limpo)
+        match_fornecedor = re.search(r'Razão social:\s*(.+)', texto_limpo)
+        match_cnpj = re.search(r'DADOS DO FORNECEDOR.*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_limpo, re.DOTALL)
+        match_prazo = re.search(r'Prazos de entrega.*?/\s*(\d{2}/\d{2}/\d{4})', texto_limpo, re.DOTALL)
+
+
+        numero_oc = match_num.group(1) if match_num else ""
+        data_emissao = match_data.group(1) if match_data else ""
+        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
+        prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
+
+    elif "Ordem de compra" in primeiras_linhas:
+        # Modelo 2
+        match_num = re.search(r'Nº\s+(\d+)\s+Valor Total:', texto_pdf)
+        match_data = re.search(r'DATA EMISSÃO\s+(\d{2}/\d{2}/\d{4})', texto_pdf)
+        match_fornecedor = re.search(r'Empresa Fornecedora:\s*(.+?)\s*CNPJ:', texto_pdf)
+        match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
+        #match_prazo = re.search(r'\d{2}/\d{2}/\d{4}\s*$', texto_pdf.split('\n')[texto_pdf.split('\n').index(next(l for l in texto_pdf.split('\n') if 'Até o dia' in l or re.search(r'\d{8}\s+\S', l)), '')] if any('Até o dia' in l or re.search(r'\d{8}\s+\S', l) for l in texto_pdf.split('\n')) else '', re.MULTILINE)
+        match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
+        
+        numero_oc = match_num.group(1) if match_num else ""
+        data_emissao = match_data.group(1) if match_data else ""
+        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
+        prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
+        
+        # if match_num:
+        #     numero_oc = match_num.group(1)
+        # if match_data:
+        #     data_emissao = match_data.group(1)
+
+    #return numero_oc, data_emissao
+    return numero_oc, data_emissao, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf
+
 
 #%%
 
@@ -363,9 +418,9 @@ def extrai_dados (numchamado):
         return None
     
     inserir_compra.clear()
-    sleep(2)
+    sleep(1)
     inserir_compra.send_keys(str(numchamado))
-    sleep(2)
+    sleep(1)
     inserir_compra.send_keys(Keys.ENTER)
     
     print("Aguardando SE Suite...")
@@ -455,6 +510,8 @@ def extrai_dados (numchamado):
         print("❌ Frame não carregou. Pulando chamado.")
         return None
     
+    janela_chamado = driver.current_window_handle
+    
     #Unidade
     unidade_map = {
     "INSTITUTO SENAI DE INOVAÇÃO EM MANUFATURA E LASER - 03774688005548 - 03774688000155": "ISI SM PL",
@@ -534,19 +591,6 @@ def extrai_dados (numchamado):
         ("Data Prevista Recebimento", '//*[@id="field_8a34490772473ce70172c30fab5e3842"]'),
         ("Data do Recebimento", '//*[@id="field_8a3449076f9f6db3016fd75554bd334c"]')
     ]
-   
-   # Extrair texto do campo 'Ordem de Compra'
-    try:
-        ordem_compra = WebDriverWait(driver, 3).until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="link_filename8a3449076f9f6db3016fc987d8462468"]'))
-        )
-        texto = ordem_compra.text.strip()
-        if texto.lower().endswith(".pdf"):
-            texto = texto[:-4]
-        dados_dos_chamados["Ordem de Compra"] = texto
-    except:
-        dados_dos_chamados["Ordem de Compra"] = "" 
-
             
     for nome, xpath in campos:
         element = WebDriverWait(driver, 100).until(
@@ -580,8 +624,69 @@ def extrai_dados (numchamado):
     dados_dos_chamados["Código Unidade"] = unidade_map.get(codigo_unidade, codigo_unidade)
 
 
+   # Extrair dados do PDF da 'Ordem de Compra'
+    try:
+        ordem_compra = WebDriverWait(driver, 3).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="link_filename8a3449076f9f6db3016fc987d8462468"]'))
+        )
+        texto = ordem_compra.text.strip()
+        if texto.lower().endswith(".pdf"):
+            texto = texto[:-4]
+        dados_dos_chamados["Ordem de Compra"] = texto
+
+        selenium_cookies = driver.get_cookies()
+        session = requests.Session()
+        for cookie in selenium_cookies:
+            session.cookies.set(cookie['name'], cookie['value'])
+
+        janela_chamado = driver.current_window_handle
+        handles_antes = set(driver.window_handles)
+        
+        ordem_compra.click()
+        WebDriverWait(driver, 10).until(lambda d: len(set(d.window_handles) - handles_antes) > 0)
+
+        aba_pdf = list(set(driver.window_handles) - handles_antes)[0]
+        driver.switch_to.window(janela_principal)
+        driver.switch_to.window(aba_pdf)
+        url_pdf = driver.current_url
+        response = session.get(url_pdf)
+        with pdfplumber.open(io.BytesIO(response.content)) as pdf:
+            texto_pdf = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+
+        #print(f"📄 Texto extraído do PDF:\n{texto_pdf}")
+        #numero_oc, data_emissao_oc_pdf = extrair_dados_oc(texto_pdf)
+        numero_oc, data_emissao_oc_pdf, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf = extrair_dados_oc(texto_pdf)
+        #print(f"🔢 Número OC: {numero_oc} | 📅 Data Emissão: {data_emissao_oc_pdf}")
+
+        dados_dos_chamados["numero_oc_pdf"] = numero_oc
+        dados_dos_chamados["data_emissao_oc_pdf"] = data_emissao_oc_pdf
+        dados_dos_chamados["nome_fornecedor_pdf"] = nome_fornecedor_pdf
+        dados_dos_chamados["cnpj_fornecedor_pdf"] = cnpj_fornecedor_pdf
+        dados_dos_chamados["prazo_entrega_pdf"] = prazo_entrega_pdf
+        
+        driver.close()
+
+    except:
+        dados_dos_chamados["Ordem de Compra"] = ""
+   
+    # Código Antigo extraindo apenas o texto do nome do arquivo:
+    #    
+    # try:
+    #     ordem_compra = WebDriverWait(driver, 3).until(
+    #         EC.presence_of_element_located((By.XPATH, '//*[@id="link_filename8a3449076f9f6db3016fc987d8462468"]'))
+    #     )
+    #     texto = ordem_compra.text.strip()
+    #     if texto.lower().endswith(".pdf"):
+    #         texto = texto[:-4]
+    #     dados_dos_chamados["Ordem de Compra"] = texto
+    # except:
+    #     dados_dos_chamados["Ordem de Compra"] = "" 
+
+    #sleep(1)
+
     ### HISTÓRICO
     # Volta para Ribbonframe para acessar histórico (ver se precisa dessa parte - Sim, precisa!)
+    driver.switch_to.window(janela_chamado)
     driver.switch_to.default_content()
     
     try:
@@ -837,7 +942,9 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
                         "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
-                        "Dias Suspenso", "Data do Recebimento"]
+                        "Dias Suspenso", "Data do Recebimento", "numero_oc_pdf",
+                        "data_emissao_oc_pdf", "nome_fornecedor_pdf", "cnpj_fornecedor_pdf",
+                        "prazo_entrega_pdf"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
