@@ -335,7 +335,6 @@ def data_hoje_ontem(data_txt):
         return None
     
 #%%    
-#import re
 
 def extrair_dados_oc(texto_pdf):
     numero_oc = ""
@@ -356,11 +355,12 @@ def extrair_dados_oc(texto_pdf):
         match_cnpj = re.search(r'DADOS DO FORNECEDOR.*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_limpo, re.DOTALL)
         match_prazo = re.search(r'Prazos de entrega.*?/\s*(\d{2}/\d{2}/\d{4})', texto_limpo, re.DOTALL)
 
-
         numero_oc = match_num.group(1) if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
         nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
-        cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
+        cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
+        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        #cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
     elif "Ordem de compra" in primeiras_linhas:
@@ -375,7 +375,9 @@ def extrair_dados_oc(texto_pdf):
         numero_oc = match_num.group(1) if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
         nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
-        cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
+        cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
+        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        #cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
         
         # if match_num:
@@ -386,6 +388,9 @@ def extrair_dados_oc(texto_pdf):
     #return numero_oc, data_emissao
     return numero_oc, data_emissao, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf
 
+    ### Na função acima, quando tem fornecedores internacionais que nao tem CNPJ
+    ### na ordem de compra, ele estava puxando o CNPJ do ISI. Assim, quando o CNPJ
+    ### é o do ISI, ele retorna "".
 
 #%%
 
