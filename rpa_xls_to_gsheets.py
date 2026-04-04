@@ -117,12 +117,12 @@ def baixar_xls():
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=tracking,104,2')
     
     #WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-    sleep(1)
+    #sleep(1)
     
     WebDriverWait(driver, 100).until(
         EC.frame_to_be_available_and_switch_to_it((By.ID, "iframe"))
     )
-    sleep(1)
+    #sleep(1)
     
     # botão seta
     botao_seta = WebDriverWait(driver, 100).until(
@@ -138,7 +138,7 @@ def baixar_xls():
     
     #print("Baixando arquivo XLS...")
     
-    sleep(1)
+    #sleep(1)
     
     caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
     inicio = time.time()
@@ -149,7 +149,7 @@ def baixar_xls():
             print("Baixando arquivo XLS...")
             #print("Convertendo arquivo para XLSX...")
             break
-        time.sleep(2)
+        time.sleep(1)
     else:
         raise TimeoutError("Download não terminou dentro do tempo esperado.")
     
@@ -349,13 +349,15 @@ def extrair_dados_oc(texto_pdf):
     if "Número AF:" in primeiras_linhas:
         # Modelo 1
         texto_limpo = re.sub(r'\(cid:\d+\)', ' ', texto_pdf)
-        match_num = re.search(r'Número AF:\s*(\d+)', texto_limpo)
+        #match_num = re.search(r'Número AF:\s*(\d+)', texto_limpo)
+        match_num = re.search(r'Número AF:\s*([\d.]+)', texto_limpo)
         match_data = re.search(r'Data:\s*(\d{2}/\d{2}/\d{4})', texto_limpo)
         match_fornecedor = re.search(r'Razão social:\s*(.+)', texto_limpo)
         match_cnpj = re.search(r'DADOS DO FORNECEDOR.*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_limpo, re.DOTALL)
         match_prazo = re.search(r'Prazos de entrega.*?/\s*(\d{2}/\d{2}/\d{4})', texto_limpo, re.DOTALL)
 
-        numero_oc = match_num.group(1) if match_num else ""
+        numero_oc = match_num.group(1).replace('.', '') if match_num else ""
+        #numero_oc = match_num.group(1) if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
         nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
@@ -395,7 +397,7 @@ def extrair_dados_oc(texto_pdf):
 #%%
 
 def extrai_dados (numchamado):
-    sleep(1)
+    #sleep(1)
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=home')
     
@@ -462,7 +464,7 @@ def extrai_dados (numchamado):
     
     ### Update 22/02/2026 - após atualização da função, parece estar funcionando bem.
     
-    sleep(1)   
+    #sleep(1)   
     tratar_alerta(driver)
     
     try:
@@ -648,6 +650,9 @@ def extrai_dados (numchamado):
         handles_antes = set(driver.window_handles)
         
         ordem_compra.click()
+        
+        #tratar_alerta(driver)
+
         WebDriverWait(driver, 10).until(lambda d: len(set(d.window_handles) - handles_antes) > 0)
 
         aba_pdf = list(set(driver.window_handles) - handles_antes)[0]
@@ -880,13 +885,13 @@ def extrai_dados (numchamado):
     dados_dos_chamados["Data Emissão OC"] = data_emissao_oc
     dados_dos_chamados["Dias Suspenso"] = dias_suspensos
 
-    print("Dados do chamado ", numchamado, " extraídos.")
+    print("Dados do chamado", numchamado, "extraídos.")
     
     return dados_dos_chamados
 
 #%%
 
-def extrai_dados_com_retry(numchamado, tentativas=2, espera=20):
+def extrai_dados_com_retry(numchamado, tentativas=2, espera=10):
     janela_principal = driver.window_handles[0]
     for tentativa in range(1, tentativas + 1):
         try:
