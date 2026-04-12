@@ -112,17 +112,17 @@ janela_principal = driver.window_handles[0]
 def baixar_xls():
     
     #WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-    sleep(1)
+    sleep(2)
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=tracking,104,2')
     
     #WebDriverWait(driver, 100).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-    #sleep(1)
+    sleep(2)
     
     WebDriverWait(driver, 100).until(
         EC.frame_to_be_available_and_switch_to_it((By.ID, "iframe"))
     )
-    #sleep(1)
+    sleep(2)
     
     # botão seta
     botao_seta = WebDriverWait(driver, 100).until(
@@ -138,12 +138,14 @@ def baixar_xls():
     
     #print("Baixando arquivo XLS...")
     
-    #sleep(1)
+    sleep(1)
     
     caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
     inicio = time.time()
     timeout = 600
     
+    # Verificar o código abaixo; está se referindo a caminho e não a nome do arquivo.
+    # Não influencia no algoritmo. Está funcionando.
     while time.time() - inicio < timeout:
         if os.path.exists(caminho) and not os.path.exists(caminho + ".crdownload"):
             print("Baixando arquivo XLS...")
@@ -270,7 +272,7 @@ def remover_chamado_manuais(ws, numero_formatado):
 #%%
 
 df = df.iloc[1:].reset_index(drop=True)
-df = df.drop(columns=['P', 'S', 'SW', 'SLA', 'PR', 'D', 'A', 'Executor', 'Processo', 'Tipo de workflow'])
+df = df.drop(columns=['P', 'S', 'SW', 'SLA', 'PR', 'D', 'A', 'Executor', 'Tipo de workflow'])
 
 #Desconsiderar atividades específicas:
 #df = df[~df["Atividade habilitada"].str.startswith("Confirmar recebimento  do item solicitado", na=False)]
@@ -278,9 +280,12 @@ df = df[~df["Atividade habilitada"].str.startswith("Analisar pertinência da sol
 df = df[~df["Atividade habilitada"].str.startswith("Solicitar aquisição", na=False)]
 df = df[~df["Atividade habilitada"].str.startswith("Tomar ciência da negativa da solicitação", na=False)]
 
-#Desconsidera identificadores que começam com E-PROC
-df = df[~df["Identificador"].astype(str).str.startswith("E-PROC", na=False)]
+# Desconsidera identificadores que começam com E-PROC
+# Ficou obsoleto devido abaixo estarmos puxando só os CISI
+#df = df[~df["Identificador"].astype(str).str.startswith("E-PROC", na=False)]
 
+#Filtra somente processos "CISI" (Compras ISI)
+df = df[df["Processo"] == "CISI"]
 
 df["AtividadeHabilitadaFiltrada"] = df["Atividade habilitada"].str.split("(", n=1).str[0].str.strip()
 print(df["AtividadeHabilitadaFiltrada"].value_counts())
@@ -299,7 +304,7 @@ atividadehabilitada = df["AtividadeHabilitadaFiltrada"].tolist()
 
 def tratar_alerta(driver):
     try:
-        WebDriverWait(driver, 2).until(EC.alert_is_present())
+        WebDriverWait(driver, 3).until(EC.alert_is_present())
         alert = driver.switch_to.alert
         print("⚠️ Alerta detectado:", alert.text)
         alert.accept()
@@ -371,7 +376,6 @@ def extrair_dados_oc(texto_pdf):
         match_data = re.search(r'DATA EMISSÃO\s+(\d{2}/\d{2}/\d{4})', texto_pdf)
         match_fornecedor = re.search(r'Empresa Fornecedora:\s*(.+?)\s*CNPJ:', texto_pdf)
         match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
-        #match_prazo = re.search(r'\d{2}/\d{2}/\d{4}\s*$', texto_pdf.split('\n')[texto_pdf.split('\n').index(next(l for l in texto_pdf.split('\n') if 'Até o dia' in l or re.search(r'\d{8}\s+\S', l)), '')] if any('Até o dia' in l or re.search(r'\d{8}\s+\S', l) for l in texto_pdf.split('\n')) else '', re.MULTILINE)
         match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
         
         numero_oc = match_num.group(1) if match_num else ""
@@ -379,15 +383,69 @@ def extrair_dados_oc(texto_pdf):
         nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
         cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
-        #cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
-        
-        # if match_num:
-        #     numero_oc = match_num.group(1)
-        # if match_data:
-        #     data_emissao = match_data.group(1)
 
-    #return numero_oc, data_emissao
+    # elif re.search(r'Ordem\s+\d+', primeiras_linhas, re.DOTALL):
+    #     # Modelo 3
+    #     match_num = re.search(r'Ordem\s+(\d+)\s+\d', texto_pdf, re.DOTALL)
+    #     #match_num = re.search(r'Nº\s+(\d+)\s+Valor Total:', texto_pdf, re.DOTALL)
+    #     #match_num = re.search(r'Nº\s+(\d+)', texto_pdf, re.DOTALL)
+    #     match_data = re.search(r'DATA EMISSÃO\s+(\d{2}/\d{2}/\d{4})', texto_pdf, re.DOTALL)
+    #     match_fornecedor = re.search(r'Empresa Fornecedora:\s*(.+?)\s*CNPJ:', texto_pdf)
+    #     match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
+    #     match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
+    #     numero_oc = match_num.group(1) if match_num else ""
+    #     data_emissao = match_data.group(1) if match_data else ""
+    #     nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+    #     cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
+    #     cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+    #     prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
+   
+    elif re.search(r'Ordem\s+\d+', primeiras_linhas, re.DOTALL):
+        # Modelo 3 - Logotipo FIESC 2026
+        
+        #match_num_raw = re.search(r'Ordem\s+(\d[\d,]+)', texto_pdf, re.DOTALL)
+        #match_valor = re.search(r'Valor Total:\s*[\r\n]+\S+[\r\n]+(\d[\d,.]+)', texto_pdf)
+        #num_raw = match_num_raw.group(1).split(',')[0] if match_num_raw else ""
+               
+        # DEBUG
+        #match_valor = re.search(r'Valor Total:\s*[\r\n]+\S+[\r\n]+(\d[\d,.]+)', texto_pdf)
+        #print(f"DEBUG match_num_raw: {match_num_raw.group(1) if match_num_raw else 'None'}")
+        #print(f"DEBUG match_valor: {match_valor.group(1) if match_valor else 'None'}")
+        # /DEBUG
+        
+        #match_valor_item = re.search(r',(\d{1,3}(?:\.\d{3})*),\d{2}(?=\d{2}/\d{2}/\d{4})', texto_pdf)
+        #print(f"DEBUG num_raw: {num_raw}")
+        #print(f"DEBUG match_valor_item: {match_valor_item.group(1) if match_valor_item else 'None'}")
+        
+        #match_valor_item = re.search(r',(\d{1,3}(?:\.\d{3})*),\d{2}(?=\d{2}/\d{2}/\d{4})', texto_pdf)
+        #if match_valor_item:
+        #    valor_str = match_valor_item.group(1).replace('.', '')
+        #    numero_oc = num_raw[:-len(valor_str)] if num_raw.endswith(valor_str) else num_raw
+        #else:
+        #    numero_oc = num_raw 
+        
+        
+        # match_valor_item = re.search(r'1,0000\s+([\d.]+),([\d]+)\1', texto_pdf)
+        # if match_valor_item:
+        #     valor_str = match_valor_item.group(1).replace('.', '')
+        #     numero_oc = num_raw[:-len(valor_str)] if num_raw.endswith(valor_str) else num_raw
+        # else:
+        #     numero_oc = num_raw
+    
+        match_num = re.search(r'Ordem\s+(\d+)', texto_pdf, re.DOTALL)
+        numero_oc = match_num.group(1) if match_num else ""
+    
+        match_data = re.search(r'DATA EMISSÃO\s+(\d{2}/\d{2}/\d{4})', texto_pdf, re.DOTALL)
+        match_fornecedor = re.search(r'Empresa Fornecedora:\s*(.+?)\s*CNPJ:', texto_pdf)
+        match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
+        match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
+        data_emissao = match_data.group(1) if match_data else ""
+        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
+        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
+
     return numero_oc, data_emissao, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf
 
     ### Na função acima, quando tem fornecedores internacionais que nao tem CNPJ
@@ -397,7 +455,7 @@ def extrair_dados_oc(texto_pdf):
 #%%
 
 def extrai_dados (numchamado):
-    #sleep(1)
+    sleep(1)
     
     driver.get(r'https://sesuite.fiesc.com.br/softexpert/workspace?page=home')
     
@@ -661,7 +719,8 @@ def extrai_dados (numchamado):
         url_pdf = driver.current_url
         response = session.get(url_pdf)
         with pdfplumber.open(io.BytesIO(response.content)) as pdf:
-            texto_pdf = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+            texto_pdf = "\n".join(page.extract_text(x_tolerance=1) for page in pdf.pages if page.extract_text(x_tolerance=1))
+            #texto_pdf = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
         #print(f"📄 Texto extraído do PDF:\n{texto_pdf}")
         #numero_oc, data_emissao_oc_pdf = extrair_dados_oc(texto_pdf)
@@ -717,7 +776,7 @@ def extrai_dados (numchamado):
         except:
             sleep(1) 
             
-    #sleep(1)    
+    sleep(1)    
 
    
     try:
