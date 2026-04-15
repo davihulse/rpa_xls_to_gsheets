@@ -51,10 +51,12 @@ driver = Chrome(service=service, options=options)
 #Dados Google Sheets
 gc = gspread.service_account(filename=os.path.join(os.path.dirname(os.getcwd()), 'crested-century-386316-01c90985d6e4.json'))
 
-spreadsheet = gc.open("Acompanhamento_Aquisições_RPA")
+#spreadsheet = gc.open("Acompanhamento_Aquisições_RPA")
+spreadsheet = gc.open_by_key("126MArpQRv1e-_YXseuxZZyi9vqOmo3xJmRnwjOgyswQ")
 worksheet = spreadsheet.worksheet("Dados")
 
-spreadsheet_proj_fin = gc.open("proj_fin")
+#spreadsheet_proj_fin = gc.open("proj_fin")
+spreadsheet_proj_fin = gc.open_by_key("19o-eM4TY6MdFGeFcmmw5A1u10yy0mAofPWZgX_2wElY")
 worksheet_proj_fin = spreadsheet_proj_fin.worksheet("Auxiliar")
 
 dados_proj_fin = worksheet_proj_fin.get_all_records()
