@@ -802,7 +802,7 @@ def extrai_dados (numchamado):
         dados_dos_chamados["Data Emissão OC"] = ""
         dados_dos_chamados["Dias Suspenso"] = ""
         dados_dos_chamados["Status"] = status_texto
-        worksheet_manuais.append_row([int(numchamado)])
+        #worksheet_manuais.append_row([int(numchamado)])
         driver.close()
         driver.switch_to.window(janela_principal)
         return dados_dos_chamados
