@@ -1015,7 +1015,7 @@ cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Id
                         "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
                         "Dias Suspenso", "Data do Recebimento", "numero_oc_pdf",
                         "data_emissao_oc_pdf", "nome_fornecedor_pdf", "cnpj_fornecedor_pdf",
-                        "prazo_entrega_pdf"]
+                        "prazo_entrega_pdf", "numero_oc_final", "prazo_entrega_final"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
@@ -1106,6 +1106,16 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
         dados_dos_chamados["ANS"] = "Cancelado"
     elif dados_dos_chamados.get("ANS") == "":
         dados_dos_chamados["ANS"] = "Em análise"
+
+    # Coluna numero_oc_final
+    numero_oc_pdf = dados_dos_chamados.get("numero_oc_pdf", "")
+    ordem_compra = dados_dos_chamados.get("Ordem de Compra", "")
+    dados_dos_chamados["numero_oc_final"] = numero_oc_pdf if numero_oc_pdf else ordem_compra if ordem_compra else ""
+
+    # Coluna prazo_entrega_final
+    prazo_entrega_pdf = dados_dos_chamados.get("prazo_entrega_pdf", "")
+    data_prevista = dados_dos_chamados.get("Data Prevista Recebimento", "")
+    dados_dos_chamados["prazo_entrega_final"] = prazo_entrega_pdf if prazo_entrega_pdf else data_prevista if data_prevista else ""
 
     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
     linha_existente = mapa_identificador_linha.get(identificador)
