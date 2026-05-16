@@ -12,6 +12,7 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoAlertPresentException, UnexpectedAlertPresentException
 from datetime import datetime, timedelta
@@ -29,8 +30,11 @@ from bs4 import BeautifulSoup
 #%%
 
 options = Options()
-options.add_argument("--headless")
+options.add_argument("--headless=new")
+#options.add_argument("--headless")
 options.add_argument("--window-size=1920,1080")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
 options.add_argument("--disable-notifications")
 options.add_argument("--disable-gcm-registration")
@@ -196,9 +200,9 @@ def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
 caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
 
 ### Comentar as 3 linhas abaixo para pular o download do XLS.
-baixar_xls()
-desbloquear_arquivo_excel(caminho)
-converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
+#baixar_xls()
+#desbloquear_arquivo_excel(caminho)
+#converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 
 
 if os.path.exists(caminho):
@@ -356,7 +360,6 @@ def extrair_dados_oc(texto_pdf):
     if "Número AF:" in primeiras_linhas:
         # Modelo 1
         texto_limpo = re.sub(r'\(cid:\d+\)', ' ', texto_pdf)
-        #match_num = re.search(r'Número AF:\s*(\d+)', texto_limpo)
         match_num = re.search(r'Número AF:\s*([\d.]+)', texto_limpo)
         match_data = re.search(r'Data:\s*(\d{2}/\d{2}/\d{4})', texto_limpo)
         match_fornecedor = re.search(r'Razão social:\s*(.+)', texto_limpo)
@@ -364,12 +367,10 @@ def extrair_dados_oc(texto_pdf):
         match_prazo = re.search(r'Prazos de entrega.*?/\s*(\d{2}/\d{2}/\d{4})', texto_limpo, re.DOTALL)
 
         numero_oc = match_num.group(1).replace('.', '') if match_num else ""
-        #numero_oc = match_num.group(1) if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
         nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
         cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
-        #cnpj_fornecedor_pdf = match_cnpj.group(1).strip() if match_cnpj else ""
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
     elif "Ordem de compra" in primeiras_linhas:
@@ -387,54 +388,10 @@ def extrair_dados_oc(texto_pdf):
         cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
-    # elif re.search(r'Ordem\s+\d+', primeiras_linhas, re.DOTALL):
-    #     # Modelo 3
-    #     match_num = re.search(r'Ordem\s+(\d+)\s+\d', texto_pdf, re.DOTALL)
-    #     #match_num = re.search(r'Nº\s+(\d+)\s+Valor Total:', texto_pdf, re.DOTALL)
-    #     #match_num = re.search(r'Nº\s+(\d+)', texto_pdf, re.DOTALL)
-    #     match_data = re.search(r'DATA EMISSÃO\s+(\d{2}/\d{2}/\d{4})', texto_pdf, re.DOTALL)
-    #     match_fornecedor = re.search(r'Empresa Fornecedora:\s*(.+?)\s*CNPJ:', texto_pdf)
-    #     match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
-    #     match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
-    #     numero_oc = match_num.group(1) if match_num else ""
-    #     data_emissao = match_data.group(1) if match_data else ""
-    #     nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
-    #     cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
-    #     cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
-    #     prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
-   
+        
     elif re.search(r'Ordem\s+\d+', primeiras_linhas, re.DOTALL):
         # Modelo 3 - Logotipo FIESC 2026
-        
-        #match_num_raw = re.search(r'Ordem\s+(\d[\d,]+)', texto_pdf, re.DOTALL)
-        #match_valor = re.search(r'Valor Total:\s*[\r\n]+\S+[\r\n]+(\d[\d,.]+)', texto_pdf)
-        #num_raw = match_num_raw.group(1).split(',')[0] if match_num_raw else ""
-               
-        # DEBUG
-        #match_valor = re.search(r'Valor Total:\s*[\r\n]+\S+[\r\n]+(\d[\d,.]+)', texto_pdf)
-        #print(f"DEBUG match_num_raw: {match_num_raw.group(1) if match_num_raw else 'None'}")
-        #print(f"DEBUG match_valor: {match_valor.group(1) if match_valor else 'None'}")
-        # /DEBUG
-        
-        #match_valor_item = re.search(r',(\d{1,3}(?:\.\d{3})*),\d{2}(?=\d{2}/\d{2}/\d{4})', texto_pdf)
-        #print(f"DEBUG num_raw: {num_raw}")
-        #print(f"DEBUG match_valor_item: {match_valor_item.group(1) if match_valor_item else 'None'}")
-        
-        #match_valor_item = re.search(r',(\d{1,3}(?:\.\d{3})*),\d{2}(?=\d{2}/\d{2}/\d{4})', texto_pdf)
-        #if match_valor_item:
-        #    valor_str = match_valor_item.group(1).replace('.', '')
-        #    numero_oc = num_raw[:-len(valor_str)] if num_raw.endswith(valor_str) else num_raw
-        #else:
-        #    numero_oc = num_raw 
-        
-        
-        # match_valor_item = re.search(r'1,0000\s+([\d.]+),([\d]+)\1', texto_pdf)
-        # if match_valor_item:
-        #     valor_str = match_valor_item.group(1).replace('.', '')
-        #     numero_oc = num_raw[:-len(valor_str)] if num_raw.endswith(valor_str) else num_raw
-        # else:
-        #     numero_oc = num_raw
-    
+           
         match_num = re.search(r'Ordem\s+(\d+)', texto_pdf, re.DOTALL)
         numero_oc = match_num.group(1) if match_num else ""
     
@@ -463,24 +420,35 @@ def extrai_dados (numchamado):
     
     janela_principal = driver.window_handles[0]
  
-    xpaths_input = [
-        '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[1]/input',
-        '//*[@id="st-container"]/div/div[1]/div/div[1]/ul[3]/div/div/div[1]/input',
-        '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[2]/input'
-    ]
+    ###### SE SUITE 2.99
+    # xpaths_input = [
+    #     '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[1]/input',
+    #     '//*[@id="st-container"]/div/div[1]/div/div[1]/ul[3]/div/div/div[1]/input',
+    #     '//*[@id="st-container"]/div/div/div/div[1]/ul[3]/div/div/div[2]/input'
+    # ]
+    
+    # inserir_compra = None
+
+    # for xpath_input in xpaths_input:
+    #     try:
+    #         inserir_compra = WebDriverWait(driver, 3).until(
+    #             EC.element_to_be_clickable((By.XPATH, xpath_input))
+    #         )
+    #         break  # encontrou, sai do loop
+    #     except:
+    #         continue
+    
+    # if not inserir_compra:
+    #     print(f"❌ Não foi possível localizar o campo de busca do chamado {numchamado}. Pulando.")
+    #     return None
+    ###### /SE SUITE 2.99
     
     inserir_compra = None
-
-    for xpath_input in xpaths_input:
-        try:
-            inserir_compra = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.XPATH, xpath_input))
-            )
-            break  # encontrou, sai do loop
-        except:
-            continue
-    
-    if not inserir_compra:
+    try:
+        inserir_compra = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-test-selector="GeneralSearchInput"]'))
+        )
+    except:
         print(f"❌ Não foi possível localizar o campo de busca do chamado {numchamado}. Pulando.")
         return None
     
@@ -493,9 +461,16 @@ def extrai_dados (numchamado):
     print("Aguardando SE Suite...")
         
     try:
+        #### SE Suite 2.99
+        # primeiro_item = WebDriverWait(driver, 100).until(
+        #     EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
+        # )
+        #### /SE Suite 2.99
+
         primeiro_item = WebDriverWait(driver, 100).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="st-container"]/div/div/div/div[4]/div/div[2]/div/div/div[2]/div/div[2]/div[1]/span'))
-        )
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-test-selector="resultTitle"]'))
+        )        
+        
         print("Chamado localizado. Extraindo dados...")
     except TimeoutException:
         print("❌ Nenhum item encontrado para o chamado. Pulando.")
@@ -528,11 +503,21 @@ def extrai_dados (numchamado):
     tratar_alerta(driver)
     
     try:
+        #### SE Suite 2.99
+        # titulo_element = WebDriverWait(driver, 10).until(
+        #     EC.presence_of_element_located((By.XPATH, '//*[@id="headerTitle"]'))
+        # )
+        # titulo_completo = titulo_element.text.strip()
+        # titulo_limpo = titulo_completo.split(" - ", 1)[1] if " - " in titulo_completo else ""
+        #### /SE Suite 2.99
+
         titulo_element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="headerTitle"]'))
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test-selector="rctSimpleEllipsisTextActive"]'))
         )
         titulo_completo = titulo_element.text.strip()
         titulo_limpo = titulo_completo.split(" - ", 1)[1] if " - " in titulo_completo else ""
+
+
     except TimeoutException:
         print("❌ Timeout ao tentar localizar o título do chamado. Pulando.")
         driver.close()
@@ -540,41 +525,54 @@ def extrai_dados (numchamado):
         return None
     
     # Status do chamado
+    #### SE Suite 2.99
+    # status_element = WebDriverWait(driver, 10).until(
+    #     EC.presence_of_element_located((By.XPATH, '//*[@id="statusTextSpan"]'))
+    # )
+    # status_texto = status_element.text.strip()
+    #### /SE Suite 2.99
+    
     status_element = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, '//*[@id="statusTextSpan"]'))
+        EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test-id="1g"] [data-test-selector="rctSimpleEllipsisTextActive"]'))
     )
     status_texto = status_element.text.strip()
             
-    ### Troca para o frame
-    try:
-        WebDriverWait(driver, 50).until(
-            EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
-        )
-    except TimeoutException:
-        print(f"❌ Timeout ao carregar frame 'ribbonFrame' no chamado {numchamado}. Pulando chamado.")
-        driver.close()
-        driver.switch_to.window(janela_principal)
-        return None
+    # ### Troca para o frame
+    # try:
+    #     WebDriverWait(driver, 50).until(
+    #         EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
+    #     )
+    # except TimeoutException:
+    #     print(f"❌ Timeout ao carregar frame 'ribbonFrame' no chamado {numchamado}. Pulando chamado.")
+    #     driver.close()
+    #     driver.switch_to.window(janela_principal)
+    #     return None
     
     # Clica no botão "Solicitação de aquisição ISI"
     for tentativa in range(3):
         try:
             botao = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//span[text()="Solicitação de aquisição ISI"]/ancestor::a'))
+                EC.element_to_be_clickable((By.XPATH, '//span[text()="Solicitação de aquisição ISI"]'))
             )
             botao.click()
+            #print("✅ Clicou em Solicitação de aquisição ISI")
             break  # Sucesso
         except:
-            #print(f"Tentativa {tentativa+1}: botão não encontrado, tentando novamente...")
+            print(f"Tentativa {tentativa+1}: botão não encontrado, tentando novamente...")
             sleep(2)    
-        
-    # Espera e entra no iframe
+
+    ## Entra no ribbonFrame e depois no frame do formulário
     try:
+        WebDriverWait(driver, 50).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
+        )
         WebDriverWait(driver, 10).until(
             EC.frame_to_be_available_and_switch_to_it((By.NAME, "frame_form_8a3449076f9f6db3016ff76aba7472f3"))
         )
     except TimeoutException:
-        print("❌ Frame não carregou. Pulando chamado.")
+        print(f"❌ Frame não carregou. Pulando chamado {numchamado}.")
+        driver.close()
+        driver.switch_to.window(janela_principal)
         return None
     
     janela_chamado = driver.current_window_handle
@@ -690,7 +688,6 @@ def extrai_dados (numchamado):
     codigo_unidade = dados_dos_chamados.get("Unidade")
     dados_dos_chamados["Código Unidade"] = unidade_map.get(codigo_unidade, codigo_unidade)
 
-
    # Extrair dados do PDF da 'Ordem de Compra'
     try:
         ordem_compra = WebDriverWait(driver, 3).until(
@@ -722,10 +719,8 @@ def extrai_dados (numchamado):
         response = session.get(url_pdf)
         with pdfplumber.open(io.BytesIO(response.content)) as pdf:
             texto_pdf = "\n".join(page.extract_text(x_tolerance=1) for page in pdf.pages if page.extract_text(x_tolerance=1))
-            #texto_pdf = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
-
         #print(f"📄 Texto extraído do PDF:\n{texto_pdf}")
-        #numero_oc, data_emissao_oc_pdf = extrair_dados_oc(texto_pdf)
+
         numero_oc, data_emissao_oc_pdf, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf = extrair_dados_oc(texto_pdf)
         #print(f"🔢 Número OC: {numero_oc} | 📅 Data Emissão: {data_emissao_oc_pdf}")
 
@@ -736,6 +731,7 @@ def extrai_dados (numchamado):
         dados_dos_chamados["prazo_entrega_pdf"] = prazo_entrega_pdf
         
         driver.close()
+        driver.switch_to.window(janela_chamado)
 
     except:
         dados_dos_chamados["Ordem de Compra"] = ""
@@ -756,46 +752,78 @@ def extrai_dados (numchamado):
     #sleep(1)
 
     ### HISTÓRICO
-    # Volta para Ribbonframe para acessar histórico (ver se precisa dessa parte - Sim, precisa!)
-    driver.switch_to.window(janela_chamado)
     driver.switch_to.default_content()
-    
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
-        )
-    except TimeoutException:
-        return None
+    #print(f"DEBUG - janelas abertas: {driver.window_handles}")
+    #print(f"DEBUG - janela atual: {driver.current_window_handle}")
     
     # Clica no botão "Histórico"
     for tentativa in range(3):
         try:
             botao = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//span[text()="Histórico"]/ancestor::a'))
+                EC.presence_of_element_located((By.XPATH, '//div[@id="pnMain_history"]'))
             )
-            botao.click()
+            driver.execute_script("arguments[0].click();", botao)
+
+            #print("DEBUG - clicou no botão Histórico")
             break
         except:
-            sleep(1) 
+            #print(f"DEBUG - tentativa {tentativa+1} histórico falhou")
+            sleep(1)
             
-    sleep(1)    
+    #sleep(1)    
 
-   
     try:
+        #print("DEBUG - tentando entrar no ribbonFrame")
+        WebDriverWait(driver, 15).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "ribbonFrame"))
+        )
+        #print("DEBUG - entrou no ribbonFrame, tentando iframe_history")
         WebDriverWait(driver, 15).until(
             EC.frame_to_be_available_and_switch_to_it((By.NAME, "iframe_history"))
         )
-        #print("🎯 Entrou no iframe_history")
+        #print("DEBUG - entrou no iframe_history")
     except TimeoutException:
-        print("❌ Não conseguiu acessar o iframe 'iframe_history'.")
+        #print("❌ Não conseguiu acessar o iframe 'iframe_history'.")
         return None
+
     
     # Clica no botão "Exibir histórico completo"
     try:
-        botao = WebDriverWait(driver, 15).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[starts-with(@id, "history")]/div/span/div/div/div/span[contains(text(), "Exibir histórico")]'))
+        # WebDriverWait(driver, 10).until(
+        #     EC.presence_of_element_located((By.XPATH, '//span[contains(text(), "Exibir histórico completo")]'))
+        # )
+        # driver.execute_script("""
+        #     document.querySelector('.seleniumSwitchWrapper input[type="checkbox"]').click();
+        # """)
+        #print("DEBUG - procurando botão histórico completo")
+        # WebDriverWait(driver, 10).until(
+        #     EC.presence_of_element_located((By.XPATH, '//span[contains(text(), "Exibir histórico completo")]'))
+        # )
+        #print(f"DEBUG botão histórico encontrado: {el.is_displayed()} | {el.is_enabled()}")
+
+        # driver.execute_script("""
+        #     var input = document.querySelector('.seleniumSwitchWrapper input[type="checkbox"]');
+        #     var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+        #     nativeInputValueSetter.call(input, true);
+        #     input.dispatchEvent(new Event('change', { bubbles: true }));
+        #     input.dispatchEvent(new Event('click', { bubbles: true }));
+        # """)
+                
+        
+        botao = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//span[contains(text(), "Exibir histórico completo")]'))
         )
+        # SE Suite 2.99
+        # botao = WebDriverWait(driver, 15).until(
+        #     EC.element_to_be_clickable((By.XPATH, '//*[starts-with(@id, "history")]/div/span/div/div/div/span[contains(text(), "Exibir histórico")]'))
+        # )
+        
+        #ActionChains(driver).move_to_element(botao).click().perform()
+
+        #driver.execute_script("arguments[0].click();", botao)
+        
         botao.click()
+        
         #print("✅ Botão 'Exibir histórico completo' clicado.")
     except TimeoutException:
         print("⚠️ Botão 'Exibir histórico completo' não clicável. Dados do histórico serão ignorados.")
@@ -921,7 +949,6 @@ def extrai_dados (numchamado):
                     data_inicio_suspensao = None
     
     dias_suspensos = sum(periodos_suspensao) if periodos_suspensao else 0
-
 
     # Prioridade sobre regra padrão apenas se não houver outra data definida
     if data_atividade_prioritaria:
@@ -1171,7 +1198,8 @@ for idx, numero in enumerate(lista_manuais):
     atividade_df = atividade.values[0] if not atividade.empty else "Indefinida"
     
     status_texto = dados_dos_chamados.get("Status", "")
-    atividade_habilitada = status_texto if status_texto in ["Encerrado", "Cancelado", "Suspenso"] else atividade_df
+    #atividade_habilitada = status_texto if status_texto in ["Encerrado", "Cancelado", "Suspenso"] else atividade_df
+    atividade_habilitada = status_texto.capitalize() if status_texto.upper() in ["ENCERRADO", "CANCELADO", "SUSPENSO"] else atividade_df
 
     if dados_dos_chamados:
         registrar_chamado(
@@ -1233,7 +1261,8 @@ conjunto_chamados_xls = set(num_chamados)
 # 2. Chamados da planilha com status diferente de "Encerrado" ou "Cancelado"
 chamados_para_verificar = [
     linha for linha in valores_existentes
-    if linha.get("Atividade Habilitada") not in ["Encerrado", "Cancelado"]
+    if str(linha.get("Atividade Habilitada", "")).capitalize() not in ["Encerrado", "Cancelado"]
+    #if linha.get("Atividade Habilitada") not in ["Encerrado", "Cancelado"]
 ]
 
 total_que_saiu = len(chamados_para_verificar) - len(conjunto_chamados_xls)
@@ -1247,7 +1276,8 @@ for idx, linha in enumerate(chamados_para_verificar):
 
         if dados_dos_chamados:
             status_texto = dados_dos_chamados.get("Status", "")
-            atividade_atualizada = status_texto if status_texto in ["Encerrado", "Cancelado", "Suspenso"] else linha.get("Atividade Habilitada", "Indefinida")
+            atividade_atualizada = status_texto.capitalize() if status_texto.upper() in ["ENCERRADO", "CANCELADO", "SUSPENSO"] else linha.get("Atividade Habilitada", "Indefinida")
+            #atividade_atualizada = status_texto if status_texto in ["Encerrado", "Cancelado", "Suspenso"] else linha.get("Atividade Habilitada", "Indefinida")
             descricao_existente = linha.get("Descrição", "")
 
             registrar_chamado(
