@@ -644,7 +644,7 @@ def extrai_dados (numchamado):
         ("Valor Final", '//*[@id="field_8a3449076f9f6db3016fc96466b81ca7"]'),
         ("Requisitante", '//*[@id="field_8a3449076f9f6db3016fc910d9eb0d60"]'),
         ("Responsável Técnico", '//*[@id="nmdataset_40c9843c1043413771550c61633c837b"]'),
-        ("Gerente do projeto", '//*[@id="nmdataset_3ead719a868ce808ea5cde33711f811c"]'),                        
+        ("Gerente do Projeto", '//*[@id="nmdataset_3ead719a868ce808ea5cde33711f811c"]'),                        
         ("Justificativa", '//*[@id="field_8a3449076f9f6db3016fc921c3a2107d"]'),
         ("Justificativa GP", '//*[@id="field_8a3449076f9f6db3016fc936726114cd"]'),
         ("Data Análise Célula", '//*[@id="field_8a3449076f9f6db3016fc93bb7e515bc"]'),
@@ -1037,9 +1037,9 @@ def adicionar_gsheet():
 todos_os_dados = []
 
 cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Identificador",
-                        "Atividade Habilitada", "projeto", "Descrição", "Fonte",
+                        "Atividade Habilitada", "nome_projeto", "Descrição", "Fonte",
                         "CR", "Projeto", "Conta", "Rubrica", "Valor R$", "Requisitante",
-                        "Responsável Técnico", "Gerente do projeto", "Justificativa",
+                        "Responsável Técnico", "Gerente do Projeto", "Justificativa",
                         "Justificativa GP", "Data Análise Célula", "Analista",
                         "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
@@ -1081,7 +1081,7 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
     
     #Inserir apelido do projeto
     codigo_projeto_extraido = dados_dos_chamados.get("Projeto", "")
-    dados_dos_chamados["projeto"] = obter_apelido_projeto(codigo_projeto_extraido)
+    dados_dos_chamados["nome_projeto"] = obter_apelido_projeto(codigo_projeto_extraido)
 
     if isinstance(dados_dos_chamados.get("Valor R$"), str):
         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
