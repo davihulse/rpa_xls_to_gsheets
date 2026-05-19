@@ -200,9 +200,9 @@ def converter_xls_para_xlsx(caminho_xls, caminho_xlsx):
 caminho = r"C:\RPA\se_suite_xls\Gestão de workflow.xls"
 
 ### Comentar as 3 linhas abaixo para pular o download do XLS.
-#baixar_xls()
-#desbloquear_arquivo_excel(caminho)
-#converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
+baixar_xls()
+desbloquear_arquivo_excel(caminho)
+converter_xls_para_xlsx(caminho,r"C:\RPA\se_suite_xls\relatorio_convertido.xlsx")
 
 
 if os.path.exists(caminho):
@@ -350,8 +350,8 @@ def data_hoje_ontem(data_txt):
 def extrair_dados_oc(texto_pdf):
     numero_oc = ""
     data_emissao = ""
-    nome_fornecedor_pdf = ""
-    cnpj_fornecedor_pdf = ""
+    nome_fornecedor = ""
+    cnpj_fornecedor = ""
     prazo_entrega_pdf = ""
     
     primeiras_linhas = "\n".join(texto_pdf.splitlines()[:5])
@@ -368,9 +368,9 @@ def extrair_dados_oc(texto_pdf):
 
         numero_oc = match_num.group(1).replace('.', '') if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
-        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        nome_fornecedor = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
-        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        cnpj_fornecedor = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
     elif "Ordem de compra" in primeiras_linhas:
@@ -383,9 +383,9 @@ def extrair_dados_oc(texto_pdf):
         
         numero_oc = match_num.group(1) if match_num else ""
         data_emissao = match_data.group(1) if match_data else ""
-        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        nome_fornecedor = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
-        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        cnpj_fornecedor = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
         
@@ -400,12 +400,12 @@ def extrair_dados_oc(texto_pdf):
         match_cnpj = re.search(r'Empresa Fornecedora:.*?CNPJ:\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', texto_pdf, re.DOTALL)
         match_prazo = next((re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l) for l in texto_pdf.split('\n') if re.search(r'(\d{2}/\d{2}/\d{4})\s*$', l)), None)
         data_emissao = match_data.group(1) if match_data else ""
-        nome_fornecedor_pdf = match_fornecedor.group(1).strip() if match_fornecedor else ""
+        nome_fornecedor = match_fornecedor.group(1).strip() if match_fornecedor else ""
         cnpj_raw = match_cnpj.group(1).strip() if match_cnpj else ""
-        cnpj_fornecedor_pdf = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
+        cnpj_fornecedor = "" if cnpj_raw in ["03.774.688/0054-67", "03.774.688/0055-48"] else cnpj_raw
         prazo_entrega_pdf = match_prazo.group(1).strip() if match_prazo else ""
 
-    return numero_oc, data_emissao, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf
+    return numero_oc, data_emissao, nome_fornecedor, cnpj_fornecedor, prazo_entrega_pdf
 
     ### Na função acima, quando tem fornecedores internacionais que nao tem CNPJ
     ### na ordem de compra, ele estava puxando o CNPJ do ISI. Assim, quando o CNPJ
@@ -642,6 +642,9 @@ def extrai_dados (numchamado):
         ("Rubrica", '//*[@id="field_8a3449076f9f6db3016fc934596a145b"]'),
         ("Valor Inicial", '//*[@id="field_8a3449076f9f6db3016fc922d7cd109b"]'),
         ("Valor Final", '//*[@id="field_8a3449076f9f6db3016fc96466b81ca7"]'),
+        ("Requisitante", '//*[@id="field_8a3449076f9f6db3016fc910d9eb0d60"]'),
+        ("Responsável Técnico", '//*[@id="nmdataset_40c9843c1043413771550c61633c837b"]'),
+        ("Gerente do projeto", '//*[@id="nmdataset_3ead719a868ce808ea5cde33711f811c"]'),                        
         ("Justificativa", '//*[@id="field_8a3449076f9f6db3016fc921c3a2107d"]'),
         ("Justificativa GP", '//*[@id="field_8a3449076f9f6db3016fc936726114cd"]'),
         ("Data Análise Célula", '//*[@id="field_8a3449076f9f6db3016fc93bb7e515bc"]'),
@@ -721,13 +724,13 @@ def extrai_dados (numchamado):
             texto_pdf = "\n".join(page.extract_text(x_tolerance=1) for page in pdf.pages if page.extract_text(x_tolerance=1))
         #print(f"📄 Texto extraído do PDF:\n{texto_pdf}")
 
-        numero_oc, data_emissao_oc_pdf, nome_fornecedor_pdf, cnpj_fornecedor_pdf, prazo_entrega_pdf = extrair_dados_oc(texto_pdf)
+        numero_oc, data_emissao_oc_pdf, nome_fornecedor, cnpj_fornecedor, prazo_entrega_pdf = extrair_dados_oc(texto_pdf)
         #print(f"🔢 Número OC: {numero_oc} | 📅 Data Emissão: {data_emissao_oc_pdf}")
 
         dados_dos_chamados["numero_oc_pdf"] = numero_oc
         dados_dos_chamados["data_emissao_oc_pdf"] = data_emissao_oc_pdf
-        dados_dos_chamados["nome_fornecedor_pdf"] = nome_fornecedor_pdf
-        dados_dos_chamados["cnpj_fornecedor_pdf"] = cnpj_fornecedor_pdf
+        dados_dos_chamados["nome_fornecedor"] = nome_fornecedor
+        dados_dos_chamados["cnpj_fornecedor"] = cnpj_fornecedor
         dados_dos_chamados["prazo_entrega_pdf"] = prazo_entrega_pdf
         
         driver.close()
@@ -1034,15 +1037,15 @@ def adicionar_gsheet():
 todos_os_dados = []
 
 cabecalhos_esperados = ["Código Unidade", "Unidade", "Data Aprovação GP", "Identificador",
-                        "Atividade Habilitada", "Nome Projeto", "Apelido Projeto",
-                        "Descrição", "Fonte", "CR", "Projeto", "Conta", "Rubrica",
-                        "Valor R$", "Justificativa", "Justificativa GP", "Data Análise Célula",
-                        "Analista", "Modalidade", "Apoio Consultivo", "Necessita Contrato",
+                        "Atividade Habilitada", "projeto", "Descrição", "Fonte",
+                        "CR", "Projeto", "Conta", "Rubrica", "Valor R$", "Requisitante",
+                        "Responsável Técnico", "Gerente do projeto", "Justificativa",
+                        "Justificativa GP", "Data Análise Célula", "Analista",
+                        "Modalidade", "Apoio Consultivo", "Necessita Contrato",
                         "Tipo Item", "ANS", "Processo Compra Finalizado", "Data Aprovação Técnica",
-                        "Ordem de Compra", "Data Prevista Recebimento", "Data Emissão OC",
-                        "Dias Suspenso", "Data do Recebimento", "numero_oc_pdf",
-                        "data_emissao_oc_pdf", "nome_fornecedor_pdf", "cnpj_fornecedor_pdf",
-                        "prazo_entrega_pdf", "numero_oc_final", "prazo_entrega_final"]
+                        "ordem_de_compra", "previsao_entrega", "data_emissao_oc",
+                        "Dias Suspenso", "Data do Recebimento", "nome_fornecedor",
+                        "cnpj_fornecedor"]
 
 valores_existentes = worksheet.get_all_records(expected_headers=cabecalhos_esperados)
 
@@ -1078,8 +1081,7 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
     
     #Inserir apelido do projeto
     codigo_projeto_extraido = dados_dos_chamados.get("Projeto", "")
-    dados_dos_chamados["Apelido Projeto"] = obter_apelido_projeto(codigo_projeto_extraido)
-
+    dados_dos_chamados["projeto"] = obter_apelido_projeto(codigo_projeto_extraido)
 
     if isinstance(dados_dos_chamados.get("Valor R$"), str):
         dados_dos_chamados["Valor R$"] = dados_dos_chamados["Valor R$"].replace('.', '')
@@ -1128,8 +1130,8 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
             }
             dados_dos_chamados["ANS"] = ans_map.get((apoio, tipo), "")
 
-    status_final = dados_dos_chamados.get("Status", "")
-    if status_final == "Cancelado" and dados_dos_chamados.get("ANS") == "":
+        status_final = dados_dos_chamados.get("Status", "")
+    if status_final.capitalize() == "Cancelado" and dados_dos_chamados.get("ANS") == "":
         dados_dos_chamados["ANS"] = "Cancelado"
     elif dados_dos_chamados.get("ANS") == "":
         dados_dos_chamados["ANS"] = "Em análise"
@@ -1137,12 +1139,19 @@ def registrar_chamado(dados_dos_chamados, atividade, descricao, identificador, h
     # Coluna numero_oc_final
     numero_oc_pdf = dados_dos_chamados.get("numero_oc_pdf", "")
     ordem_compra = dados_dos_chamados.get("Ordem de Compra", "")
-    dados_dos_chamados["numero_oc_final"] = numero_oc_pdf if numero_oc_pdf else ordem_compra if ordem_compra else ""
+    dados_dos_chamados["ordem_de_compra"] = numero_oc_pdf if numero_oc_pdf else ordem_compra if ordem_compra else ""
+    
+    
+    # Coluna data_emissao_oc (final)
+    data_emissao_oc_pdf = dados_dos_chamados.get("data_emissao_oc_pdf", "")
+    data_emissao_oc = dados_dos_chamados.get("Data Emissão OC", "")
+    dados_dos_chamados["data_emissao_oc"] = data_emissao_oc_pdf if data_emissao_oc_pdf else data_emissao_oc if data_emissao_oc else ""
+    
 
     # Coluna prazo_entrega_final
     prazo_entrega_pdf = dados_dos_chamados.get("prazo_entrega_pdf", "")
     data_prevista = dados_dos_chamados.get("Data Prevista Recebimento", "")
-    dados_dos_chamados["prazo_entrega_final"] = prazo_entrega_pdf if prazo_entrega_pdf else data_prevista if data_prevista else ""
+    dados_dos_chamados["previsao_entrega"] = prazo_entrega_pdf if prazo_entrega_pdf else data_prevista if data_prevista else ""
 
     linha_ordenada = [dados_dos_chamados.get(col, "") for col in cabecalhos_esperados]
     linha_existente = mapa_identificador_linha.get(identificador)
@@ -1271,7 +1280,8 @@ total_que_saiu = len(chamados_para_verificar) - len(conjunto_chamados_xls)
 for idx, linha in enumerate(chamados_para_verificar):
     identificador = str(linha["Identificador"]).zfill(6)
     if identificador not in conjunto_chamados_xls:
-        print(f"[{idx+1}/{total_que_saiu}] 🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
+        #print(f"[{idx+1}/{total_que_saiu}] 🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
+        print(f"🔁 Chamado {identificador} saiu do XLS. Extraindo novamente...")
         dados_dos_chamados = extrai_dados_com_retry(identificador)
 
         if dados_dos_chamados:
